@@ -4,8 +4,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,31 +49,40 @@ data class OnboardingPage(
  * 当前 4 页: 欢迎 → 功能说明 → 通知权限 → 屏幕捕获授权(MediaProjection)。
  * 视觉由你自行绘制: 直接替换各页 content 中的实现即可, 框架不关心页面内部。
  */
-fun onboardingPages(): List<OnboardingPage> = listOf(
-    // ── 第 1 步: 欢迎与产品简介 ─────────────────────────────────────
-    OnboardingPage {
-        SamplePage(
-            title = "欢迎使用家'助'",
-            description = "家助是一款远程屏幕控制应用, 让您随时远程操作家人的手机。\n\n这里是产品介绍正文区域, 后续替换为你设计的文案与配图。",
-        )
-    },
+fun onboardingPages(): List<OnboardingPage> = buildList {
+    // ── 第 1 步: 欢迎与产品简介 ────
+    add(
+        OnboardingPage {
+            SamplePage(
+                title = "欢迎使用家'助'",
+                description = "家助是一款远程屏幕控制应用, 让您随时远程操作家人的手机。\n\n这里是产品介绍正文区域, 后续替换为你设计的文案与配图。",
+            )
+        }
+    )
     // ── 第 2 步: 核心功能说明 ───────────────────────────────────────
-    OnboardingPage {
-        SamplePage(
-            title = "核心功能",
-            description = "可以在此页介绍产品的主要能力, 例如:\n\n· 远程屏幕共享\n· 远程协助操作\n· 语音通话与消息\n· 设备安全与隐私保障",
+    add(
+        OnboardingPage {
+            SamplePage(
+                title = "核心功能",
+                description = "可以在此页介绍产品的主要能力, 例如:\n\n· 远程屏幕共享\n· 远程协助操作\n· 语音通话与消息\n· 设备安全与隐私保障",
+            )
+        }
+    )
+    // ── 第 3 步: 请求系统权限(示例: 通知权限) Android13才需要请求通知权限，android12不显示 ───────────────────────
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        add(
+            OnboardingPage {
+                NotificationPermissionPage()
+            }
         )
-    },
-    // ── 第 3 步: 请求系统权限(示例: 通知权限) ───────────────────────
-    OnboardingPage {
-        NotificationPermissionPage()
-    },
-    // ── 第 4 步: 请求屏幕捕获授权(MediaProjection) ──────────────────
-    OnboardingPage {
-        MediaProjectionPermissionPage()
-    },
-)
-
+    }
+    //第 4 步: 请求屏幕捕获授权(MediaProjection) 请求后需要立即消费，欢迎页中不做消费
+//    add(
+//        OnboardingPage {
+//            MediaProjectionPermissionPage()
+//        }
+//    )
+}
 /**
  * 普通说明页的通用布局(占位示例): 插图区 + 标题 + 说明文字。
  * 整体可滚动, 适配小屏。各页可直接复用或完全重绘。
@@ -155,7 +166,11 @@ private fun NotificationPermissionPage() {
         )
         Spacer(modifier = Modifier.height(32.dp))
         OutlinedButton(
-            onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+            onClick = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),

@@ -5,6 +5,12 @@
     <!-- 欢迎页第 3 步会请求通知权限(Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 远程配对/控制: WebSocket 信令(预留, 后续接服务端) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 屏幕捕获: 前台服务 + MediaProjection 类型 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -25,6 +31,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 屏幕捕获前台服务(预留): 消费 MediaProjection 授权令牌, 供 WebRTC 编码发送 -->
+        <service
+            android:name=".service.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
     </application>
 
 </manifest>

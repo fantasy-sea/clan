@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -19,7 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,16 +48,17 @@ fun OnboardingScreen(
     val coroutineScope = rememberCoroutineScope()
     val isLastPage = pagerState.currentPage == pages.lastIndex
 
-    Surface(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-
+    Scaffold(modifier = modifier.fillMaxSize()) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
             // ── 上方固定区域: 当前步骤指示 + 右上角跳过 ──────────────
             OnboardingHeader(
                 currentStep = pagerState.currentPage + 1,
                 totalSteps = pages.size,
                 onSkip = {
-                    // 默认: 跳到最后一页让用户看到"开始使用";
-                    // 若希望"跳过 = 直接完成", 把这里改成 onComplete()
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pages.lastIndex)
                     }
@@ -106,7 +106,7 @@ private fun OnboardingHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 24.dp, end = 8.dp, top = 12.dp),
+                .padding(start = 24.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -135,34 +135,32 @@ private fun OnboardingFooter(
     onNext: () -> Unit,
 ) {
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        repeat(totalSteps) { index ->
-            val isCurrent = index == currentStep - 1
-            Box(
-                modifier = Modifier
-                    .height(8.dp)
-                    .width(if (isCurrent) 24.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isCurrent) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    ),
-            )
-        }
-    }
-
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement
+                .spacedBy(space = 8.dp, alignment = Alignment.CenterHorizontally)
+        ) {
+            repeat(totalSteps) { index ->
+                val isCurrent = index == currentStep - 1
+                Box(
+                    modifier = Modifier
+                        .height(8.dp)
+                        .width(if (isCurrent) 24.dp else 8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isCurrent) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                )
+            }
+        }
         Button(
             onClick = onNext,
             modifier = Modifier
