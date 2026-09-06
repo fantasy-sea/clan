@@ -31,6 +31,9 @@ interface ClanRepository {
     /** 已配对设备列表(含在线状态)。 */
     suspend fun fetchDevices(): List<PairedDevice>
 
+    /** 按 id 查询设备(含本机身份); 会话页/导航层据此按 id 恢复设备对象。 */
+    suspend fun findDevice(deviceId: Long): Device?
+
     /** 解除与某设备的绑定(左滑删除)。 */
     suspend fun unbindDevice(deviceId: Long)
 

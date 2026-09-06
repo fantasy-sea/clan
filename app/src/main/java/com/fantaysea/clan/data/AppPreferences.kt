@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "clan_prefs")
+private val Context.dataStore by  preferencesDataStore(name = "clan_prefs")
 
 /**
  * 应用级本地偏好(DataStore)。

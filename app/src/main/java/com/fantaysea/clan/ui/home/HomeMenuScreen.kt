@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.core.navigation.HomeDestination
 
 /**
  * 首页菜单: 品牌区 + 两个入口大卡片(远程控制 / 共享屏幕)。

@@ -123,6 +123,12 @@ class MockServer(
         return devices.map { PairedDevice(it, it.id in onlineIds) }
     }
 
+    override suspend fun findDevice(deviceId: Long): Device? {
+        simulateLatency()
+        return devices.firstOrNull { it.id == deviceId }
+            ?: _self.value?.takeIf { it.id == deviceId }
+    }
+
     override suspend fun unbindDevice(deviceId: Long) {
         simulateLatency()
         devices.removeAll { it.id == deviceId }

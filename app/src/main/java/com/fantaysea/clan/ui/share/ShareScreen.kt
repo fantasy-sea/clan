@@ -28,7 +28,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -56,7 +55,7 @@ import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.ui.components.CountdownRing
-import com.fantaysea.clan.ui.home.HomeDestination
+import com.fantaysea.clan.core.navigation.HomeDestination
 
 private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
 
@@ -76,7 +75,7 @@ fun ShareScreen(
     LaunchedEffect(state.controlledSessionPeer) {
         val peer = state.controlledSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(HomeDestination.ControlledSession(peer))
+        onNavigate(HomeDestination.ControlledSession(peer.id))
     }
 
     LaunchedEffect(Unit) {

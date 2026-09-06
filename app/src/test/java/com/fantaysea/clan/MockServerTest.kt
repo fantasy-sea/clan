@@ -128,4 +128,29 @@ class MockServerTest {
         assertEquals(1, devices.size)
         assertEquals("爸爸的手机", devices.first().device.deviceName)
     }
+
+    @Test
+    fun `findDevice returns paired device`() = runBlocking {
+        val server = MockServer(delayMillis = 0)
+        val device = server.findDevice(1L) // 妈妈的手机(种子设备)
+        assertEquals(1L, device?.id)
+        assertEquals("妈妈的手机", device?.deviceName)
+    }
+
+    @Test
+    fun `findDevice returns self device`() = runBlocking {
+        val server = MockServer(delayMillis = 0)
+        server.registerSelf("tok", "Pixel 7", "Android", "Pixel 7")
+        val device = server.findDevice(MockServer.SELF_ID)
+        assertEquals(MockServer.SELF_ID, device?.id)
+        assertEquals("Pixel 7", device?.deviceName)
+    }
+
+    @Test
+    fun `findDevice returns null for unknown or unbound device`() = runBlocking {
+        val server = MockServer(delayMillis = 0)
+        assertEquals(null, server.findDevice(999L))
+        server.unbindDevice(1L)
+        assertEquals(null, server.findDevice(1L))
+    }
 }
