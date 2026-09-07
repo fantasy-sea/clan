@@ -60,13 +60,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.repository.PairedDevice
-import com.fantaysea.clan.core.navigation.HomeDestination
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @Composable
 fun ControlHomeScreen(
-    onNavigate: (HomeDestination) -> Unit,
+    onNavigate: (id:Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(MockServer.instance) }
@@ -79,7 +78,7 @@ fun ControlHomeScreen(
     LaunchedEffect(state.controlSessionPeer) {
         val peer = state.controlSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(HomeDestination.ControlSession(peer.id))
+        onNavigate(peer.id)
     }
 
     LaunchedEffect(Unit) {

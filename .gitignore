@@ -41,6 +41,7 @@ google-services.json
 #Kotlin
 .kotlin/
 
-
+#agent
 .dsh/
+.codex/
 

@@ -55,13 +55,12 @@ import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.ui.components.CountdownRing
-import com.fantaysea.clan.core.navigation.HomeDestination
 
 private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
 
 @Composable
 fun ShareScreen(
-    onNavigate: (HomeDestination) -> Unit,
+    onNavigate: (id:Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -75,7 +74,7 @@ fun ShareScreen(
     LaunchedEffect(state.controlledSessionPeer) {
         val peer = state.controlledSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(HomeDestination.ControlledSession(peer.id))
+        onNavigate(peer.id)
     }
 
     LaunchedEffect(Unit) {
