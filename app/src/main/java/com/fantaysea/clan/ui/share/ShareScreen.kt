@@ -47,6 +47,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,6 +60,13 @@ import com.fantaysea.clan.ui.components.CountdownRing
 import com.fantaysea.clan.core.navigation.HomeDestination
 
 private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
+
+@Preview
+@Composable
+fun ShareScreenPreview(){
+    ShareScreen({},{})
+}
+
 
 @Composable
 fun ShareScreen(
@@ -86,6 +95,7 @@ fun ShareScreen(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         captureManager.onConsent(result.resultCode, result.data)
+        //让vm处理权限请求结果
         vm.onPermissionResult(captureManager.isGranted)
     }
 
@@ -119,6 +129,7 @@ fun ShareScreen(
                 StatusChip(granted = state.permissionState == SharePermissionState.Granted)
             }
         },
+        modifier = Modifier.fillMaxSize()
     ) { padding ->
         Box(
             modifier = Modifier
@@ -127,8 +138,11 @@ fun ShareScreen(
             contentAlignment = Alignment.Center,
         ) {
             when (state.permissionState) {
+                //具备权限显示匹配界面
                 SharePermissionState.Granted -> ShareContent(state = state)
+                //没有权限（权限被拒绝、或没有）
                 else -> PermissionGate(
+                    //denied为false时为尚未请求该权限
                     denied = state.permissionState == SharePermissionState.Denied,
                     onRequest = {
                         permissionLauncher.launch(captureManager.createCaptureIntent())
@@ -215,7 +229,7 @@ private fun PermissionGate(denied: Boolean, onRequest: () -> Unit) {
         }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = if (denied) "未获得屏幕捕获授权" else "授权屏幕捕获",
+            text = if (denied) "请先授权方可使用" else "授权屏幕捕获",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
@@ -336,7 +350,7 @@ private fun ShareContent(state: ShareUiState) {
                 // 有效时间环形指示器
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CountdownRing(
-                        fraction = if (VALIDITY_MS <= 0) 0f else (state.remainingMillis.toFloat() / VALIDITY_MS.toFloat()),
+                        fraction = state.remainingMillis.toFloat() / VALIDITY_MS.toFloat(),
                         remainingSeconds = (state.remainingMillis / 1000L).toInt(),
                     )
                     Spacer(modifier = Modifier.width(16.dp))
