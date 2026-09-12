@@ -55,35 +55,172 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fantaysea.clan.data.mock.MockServer
+import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.PairedDevice
+import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.ui.theme.ClanTheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+private val previewOnlineDevice = PairedDevice(
+    device = Device(
+        id = 1L,
+        deviceToken = "preview-mom",
+        deviceName = "妈妈的手机",
+        platform = "Android",
+        model = "HUAWEI Mate 40",
+        lastOnlineAt = 0L,
+        createdAt = 0L,
+    ),
+    online = true,
+)
+
+private val previewOfflineDevice = PairedDevice(
+    device = Device(
+        id = 2L,
+        deviceToken = "preview-dad",
+        deviceName = "爸爸的手机",
+        platform = "Android",
+        model = "Xiaomi 12",
+        lastOnlineAt = null,
+        createdAt = 0L,
+    ),
+    online = false,
+)
+
+@Preview(name = "设备列表", group = "页面状态", showBackground = true)
+@Composable
+fun ControlHomeScreenPreview() {
+    ControlHomePreviewContent(
+        state = ControlHomeUiState(
+            loading = false,
+            devices = listOf(previewOnlineDevice, previewOfflineDevice),
+        ),
+    )
+}
+
+@Preview(name = "加载中", group = "页面状态", showBackground = true)
+@Composable
+private fun ControlHomeLoadingPreview() {
+    ControlHomePreviewContent(state = ControlHomeUiState())
+}
+
+@Preview(name = "空设备列表", group = "页面状态", showBackground = true)
+@Composable
+private fun ControlHomeEmptyPreview() {
+    ControlHomePreviewContent(state = ControlHomeUiState(loading = false))
+}
+
+@Preview(name = "加载失败", group = "页面状态", showBackground = true)
+@Composable
+private fun ControlHomeErrorPreview() {
+    ControlHomePreviewContent(
+        state = ControlHomeUiState(
+            loading = false,
+            error = "网络连接失败，请稍后重试",
+        ),
+    )
+}
+
+@Preview(name = "等待控制确认", group = "页面状态", showBackground = true)
+@Composable
+private fun ControlHomeWaitingPreview() {
+    ControlHomePreviewContent(
+        state = ControlHomeUiState(
+            loading = false,
+            devices = listOf(previewOnlineDevice, previewOfflineDevice),
+            pendingControl = previewOnlineDevice,
+        ),
+    )
+}
+
+@Preview(name = "删除确认弹窗", group = "弹窗", showBackground = true)
+@Composable
+private fun DeleteDeviceConfirmDialogPreview() {
+    ClanTheme {
+        DeleteDeviceConfirmDialog(
+            target = previewOnlineDevice,
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Composable
+private fun ControlHomePreviewContent(state: ControlHomeUiState) {
+    ClanTheme {
+        ControlHomeScreenContent(
+            state = state,
+            snackbarHostState = remember { SnackbarHostState() },
+            onBack = {},
+            onOpenPairDialog = {},
+            onRetry = {},
+            onPairDialogDismiss = {},
+            onPairCodeChanged = {},
+            onPairCodeComplete = {},
+            onRequestControl = {},
+            onDeleteDevice = {},
+            onCancelControl = {},
+        )
+    }
+}
+
 @Composable
 fun ControlHomeScreen(
-    onNavigate: (id:Long) -> Unit,
+    onNavigate: (HomeDestination) -> Unit,
     onBack: () -> Unit,
 ) {
     val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(MockServer.instance) }
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var deviceToDelete by remember { mutableStateOf<PairedDevice?>(null) }
 
     BackHandler { onBack() }
 
     LaunchedEffect(state.controlSessionPeer) {
         val peer = state.controlSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(peer.id)
+        onNavigate(HomeDestination.ControlSession(peer.id))
     }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbarHostState.showSnackbar(it) }
     }
+
+    ControlHomeScreenContent(
+        state = state,
+        snackbarHostState = snackbarHostState,
+        onBack = onBack,
+        onOpenPairDialog = vm::openPairDialog,
+        onRetry = vm::retry,
+        onPairDialogDismiss = vm::closePairDialog,
+        onPairCodeChanged = vm::onCodeChanged,
+        onPairCodeComplete = vm::submitPairCode,
+        onRequestControl = vm::requestControl,
+        onDeleteDevice = vm::deleteDevice,
+        onCancelControl = vm::cancelControl,
+    )
+}
+
+@Composable
+private fun ControlHomeScreenContent(
+    state: ControlHomeUiState,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onOpenPairDialog: () -> Unit,
+    onRetry: () -> Unit,
+    onPairDialogDismiss: () -> Unit,
+    onPairCodeChanged: (String) -> Unit,
+    onPairCodeComplete: (String) -> Unit,
+    onRequestControl: (PairedDevice) -> Unit,
+    onDeleteDevice: (PairedDevice) -> Unit,
+    onCancelControl: () -> Unit,
+) {
+    var deviceToDelete by remember { mutableStateOf<PairedDevice?>(null) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -112,7 +249,7 @@ fun ControlHomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = vm::openPairDialog) {
+                TextButton(onClick = onOpenPairDialog) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("添加设备")
@@ -127,11 +264,11 @@ fun ControlHomeScreen(
         ) {
             when {
                 state.loading -> LoadingView()
-                state.error != null -> ErrorView(state.error!!, onRetry = vm::retry)
-                state.devices.isEmpty() -> EmptyView(onAdd = vm::openPairDialog)
+                state.error != null -> ErrorView(state.error, onRetry = onRetry)
+                state.devices.isEmpty() -> EmptyView(onAdd = onOpenPairDialog)
                 else -> DeviceList(
                     devices = state.devices,
-                    onClick = vm::requestControl,
+                    onClick = onRequestControl,
                     onDelete = { deviceToDelete = it },
                 )
             }
@@ -142,27 +279,21 @@ fun ControlHomeScreen(
     if (state.pairDialogVisible) {
         PairCodeDialog(
             state = state,
-            onDismiss = vm::closePairDialog,
-            onCodeChanged = vm::onCodeChanged,
-            onComplete = vm::submitPairCode,
+            onDismiss = onPairDialogDismiss,
+            onCodeChanged = onPairCodeChanged,
+            onComplete = onPairCodeComplete,
         )
     }
 
     // 删除确认
     deviceToDelete?.let { target ->
-        AlertDialog(
-            onDismissRequest = { deviceToDelete = null },
-            title = { Text("移除设备") },
-            text = { Text("确定解除与「${target.device.deviceName}」的配对关系吗？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.deleteDevice(target)
-                    deviceToDelete = null
-                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+        DeleteDeviceConfirmDialog(
+            target = target,
+            onConfirm = {
+                onDeleteDevice(target)
+                deviceToDelete = null
             },
-            dismissButton = {
-                TextButton(onClick = { deviceToDelete = null }) { Text("取消") }
-            },
+            onDismiss = { deviceToDelete = null },
         )
     }
 
@@ -170,9 +301,30 @@ fun ControlHomeScreen(
     state.pendingControl?.let { target ->
         WaitingControlOverlay(
             device = target,
-            onCancel = vm::cancelControl,
+            onCancel = onCancelControl,
         )
     }
+}
+
+@Composable
+private fun DeleteDeviceConfirmDialog(
+    target: PairedDevice,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("移除设备") },
+        text = { Text("确定解除与「${target.device.deviceName}」的配对关系吗？") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("删除", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable
