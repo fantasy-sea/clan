@@ -55,125 +55,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fantaysea.clan.data.mock.MockServer
-import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.PairedDevice
-import com.fantaysea.clan.core.navigation.HomeDestination
-import com.fantaysea.clan.ui.theme.ClanTheme
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-
-private val previewOnlineDevice = PairedDevice(
-    device = Device(
-        id = 1L,
-        deviceToken = "preview-mom",
-        deviceName = "妈妈的手机",
-        platform = "Android",
-        model = "HUAWEI Mate 40",
-        lastOnlineAt = 0L,
-        createdAt = 0L,
-    ),
-    online = true,
-)
-
-private val previewOfflineDevice = PairedDevice(
-    device = Device(
-        id = 2L,
-        deviceToken = "preview-dad",
-        deviceName = "爸爸的手机",
-        platform = "Android",
-        model = "Xiaomi 12",
-        lastOnlineAt = null,
-        createdAt = 0L,
-    ),
-    online = false,
-)
-
-@Preview(name = "设备列表", group = "页面状态", showBackground = true)
+import kotlin.math.roundToInt
 @Composable
-fun ControlHomeScreenPreview() {
-    ControlHomePreviewContent(
-        state = ControlHomeUiState(
-            loading = false,
-            devices = listOf(previewOnlineDevice, previewOfflineDevice),
-        ),
-    )
-}
-
-@Preview(name = "加载中", group = "页面状态", showBackground = true)
-@Composable
-private fun ControlHomeLoadingPreview() {
-    ControlHomePreviewContent(state = ControlHomeUiState())
-}
-
-@Preview(name = "空设备列表", group = "页面状态", showBackground = true)
-@Composable
-private fun ControlHomeEmptyPreview() {
-    ControlHomePreviewContent(state = ControlHomeUiState(loading = false))
-}
-
-@Preview(name = "加载失败", group = "页面状态", showBackground = true)
-@Composable
-private fun ControlHomeErrorPreview() {
-    ControlHomePreviewContent(
-        state = ControlHomeUiState(
-            loading = false,
-            error = "网络连接失败，请稍后重试",
-        ),
-    )
-}
-
-@Preview(name = "等待控制确认", group = "页面状态", showBackground = true)
-@Composable
-private fun ControlHomeWaitingPreview() {
-    ControlHomePreviewContent(
-        state = ControlHomeUiState(
-            loading = false,
-            devices = listOf(previewOnlineDevice, previewOfflineDevice),
-            pendingControl = previewOnlineDevice,
-        ),
-    )
-}
-
-@Preview(name = "删除确认弹窗", group = "弹窗", showBackground = true)
-@Composable
-private fun DeleteDeviceConfirmDialogPreview() {
-    ClanTheme {
-        DeleteDeviceConfirmDialog(
-            target = previewOnlineDevice,
-            onConfirm = {},
-            onDismiss = {},
-        )
-    }
-}
-
-@Composable
-private fun ControlHomePreviewContent(state: ControlHomeUiState) {
-    ClanTheme {
-        ControlHomeScreenContent(
-            state = state,
-            snackbarHostState = remember { SnackbarHostState() },
-            onBack = {},
-            onOpenPairDialog = {},
-            onRetry = {},
-            onPairDialogDismiss = {},
-            onPairCodeChanged = {},
-            onPairCodeComplete = {},
-            onRequestControl = {},
-            onDeleteDevice = {},
-            onCancelControl = {},
-        )
-    }
-}
-
-@Composable
-fun ControlHomeScreen(
-    onNavigate: (HomeDestination) -> Unit,
-    onBack: () -> Unit,
+internal fun ControlHomeScreen(
+    onNavigate: () -> Unit = {},
+    onBack: () -> Unit = {},
 ) {
     val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(MockServer.instance) }
     val state by vm.uiState.collectAsState()
@@ -184,7 +76,7 @@ fun ControlHomeScreen(
     LaunchedEffect(state.controlSessionPeer) {
         val peer = state.controlSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(HomeDestination.ControlSession(peer.id))
+        onNavigate()
     }
 
     LaunchedEffect(Unit) {
@@ -207,7 +99,7 @@ fun ControlHomeScreen(
 }
 
 @Composable
-private fun ControlHomeScreenContent(
+internal fun ControlHomeScreenContent(
     state: ControlHomeUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
@@ -243,14 +135,20 @@ private fun ControlHomeScreenContent(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        text = "已配对 ${state.devices.size} 台设备",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if(state.pageState is DeviceListState.Success){
+                        Text(
+                            text = "已配对 ${state.pageState.devices.size} 台设备",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 TextButton(onClick = onOpenPairDialog) {
-                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("添加设备")
                 }
@@ -262,19 +160,19 @@ private fun ControlHomeScreenContent(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when {
-                state.loading -> LoadingView()
-                state.error != null -> ErrorView(state.error, onRetry = onRetry)
-                state.devices.isEmpty() -> EmptyView(onAdd = onOpenPairDialog)
-                else -> DeviceList(
-                    devices = state.devices,
-                    onClick = onRequestControl,
-                    onDelete = { deviceToDelete = it },
-                )
+            when (val pageState = state.pageState) {
+                is DeviceListState.Loading -> LoadingView()
+                is DeviceListState.Error -> ErrorView(pageState.message, onRetry = onRetry)
+                is DeviceListState.Empty -> EmptyView(onAdd = onOpenPairDialog)
+                is DeviceListState.Success ->
+                    DeviceList(
+                        devices = pageState.devices,
+                        onClick = onRequestControl,
+                        onDelete = { deviceToDelete = it },
+                    )
             }
         }
     }
-
     // 配对码弹窗
     if (state.pairDialogVisible) {
         PairCodeDialog(
@@ -307,7 +205,7 @@ private fun ControlHomeScreenContent(
 }
 
 @Composable
-private fun DeleteDeviceConfirmDialog(
+internal fun DeleteDeviceConfirmDialog(
     target: PairedDevice,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -337,7 +235,9 @@ private fun LoadingView() {
 @Composable
 private fun ErrorView(message: String, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -352,7 +252,9 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
 @Composable
 private fun EmptyView(onAdd: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -371,7 +273,11 @@ private fun EmptyView(onAdd: () -> Unit) {
             )
         }
         Spacer(modifier = Modifier.height(20.dp))
-        Text("还没有配对设备", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "还没有配对设备",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             "在对方设备的「共享屏幕」页获取匹配码",
@@ -564,7 +470,11 @@ private fun WaitingControlOverlay(
         ) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(20.dp))
-            Text("正在请求控制", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "正在请求控制",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 "等待「${device.device.deviceName}」同意…",

@@ -10,7 +10,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
@@ -22,7 +21,6 @@ import com.fantaysea.clan.ui.control.ControlHomeScreen
 import com.fantaysea.clan.ui.control.SessionDeviceGate
 import com.fantaysea.clan.ui.home.HomeMenuScreen
 import com.fantaysea.clan.ui.onboarding.OnboardingScreen
-import com.fantaysea.clan.ui.onboarding.onboardingPages
 import com.fantaysea.clan.ui.session.ControlSessionScreen
 import com.fantaysea.clan.ui.session.ControlledSessionScreen
 import com.fantaysea.clan.ui.share.ShareScreen
@@ -48,18 +46,21 @@ fun AppNavigation() {
         navigation<HomeGraph>(startDestination = Home) {
 
             /** home 域转场(滑动 + 淡入淡出, 与原先 AnimatedContent 观感一致) */
-            val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-                slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(320))
-            }
+            val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
+                {
+                    slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(320))
+                }
             val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
                 slideOutHorizontally(tween(320)) { -it / 4 } + fadeOut(tween(240))
             }
-            val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-                slideInHorizontally(tween(320)) { -it / 4 } + fadeIn(tween(320))
-            }
-            val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-                slideOutHorizontally(tween(320)) { it / 4 } + fadeOut(tween(240))
-            }
+            val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
+                {
+                    slideInHorizontally(tween(320)) { -it / 4 } + fadeIn(tween(320))
+                }
+            val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
+                {
+                    slideOutHorizontally(tween(320)) { it / 4 } + fadeOut(tween(240))
+                }
 
             composable<Home>(
                 enterTransition = homeEnter,
@@ -67,7 +68,10 @@ fun AppNavigation() {
                 popEnterTransition = homePopEnter,
                 popExitTransition = homePopExit,
             ) {
-                HomeMenuScreen(onNavigate = { Unit })
+                HomeMenuScreen(
+                    onNavigateToControl = { navController.navigate(HomeControl) },
+                    onNavigateToShare = { navController.navigate(HomeShare) },
+                )
             }
             composable<HomeControl>(
                 enterTransition = homeEnter,
@@ -76,7 +80,7 @@ fun AppNavigation() {
                 popExitTransition = homePopExit,
             ) {
                 ControlHomeScreen(
-                    onNavigate = { id->
+                    onNavigate = {
                         navController.navigate(HomeControl)
                     },
                     onBack = { navController.popBackStack() },
@@ -127,7 +131,6 @@ fun AppNavigation() {
         }
         composable<Onboarding> {
             OnboardingScreen(
-                pages = remember { onboardingPages() },
                 onComplete = { coroutineScope.launch { appPreferences.setOnboardingCompleted(true) } },
             )
         }

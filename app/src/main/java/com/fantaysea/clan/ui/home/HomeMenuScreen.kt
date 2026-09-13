@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,8 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.ScreenShare
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 /**
@@ -50,10 +50,15 @@ import androidx.compose.ui.unit.dp
  * 暖色渐变背景 + 装饰光斑 + 交错入场 + 按压缩放。
  */
 @Composable
-fun HomeMenuScreen(onNavigate: () -> Unit) {
-    var entered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { entered = true }
-
+fun HomeMenuScreen(
+    onNavigateToControl: () -> Unit={},
+    onNavigateToShare: () -> Unit={},
+    isPlayAnimation: Boolean = true,
+) {
+    var entered by remember(isPlayAnimation) { mutableStateOf(!isPlayAnimation) }
+    LaunchedEffect(Unit) {
+        if (isPlayAnimation) entered = true
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -95,7 +100,6 @@ fun HomeMenuScreen(onNavigate: () -> Unit) {
                 visible = entered,
                 enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 8 },
             ) {
-                Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
@@ -112,7 +116,7 @@ fun HomeMenuScreen(onNavigate: () -> Unit) {
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.ScreenShare,
+                                imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(28.dp),
@@ -132,11 +136,8 @@ fun HomeMenuScreen(onNavigate: () -> Unit) {
                             )
                         }
                     }
-                }
             }
-
             Spacer(modifier = Modifier.height(40.dp))
-
             // 入口卡片(交错入场)
             MenuCard(
                 visible = entered,
@@ -148,20 +149,20 @@ fun HomeMenuScreen(onNavigate: () -> Unit) {
                     MaterialTheme.colorScheme.primaryContainer,
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
                 ),
-                onClick = { onNavigate() },
+                onClick = onNavigateToControl,
             )
             Spacer(modifier = Modifier.height(20.dp))
             MenuCard(
                 visible = entered,
                 delay = 240,
-                icon = Icons.Outlined.ScreenShare,
+                icon = Icons.AutoMirrored.Outlined.ScreenShare,
                 title = "共享屏幕",
                 description = "让家人远程协助本机",
                 gradient = listOf(
                     MaterialTheme.colorScheme.tertiaryContainer,
                     MaterialTheme.colorScheme.tertiary.copy(alpha = 0.75f),
                 ),
-                onClick = { onNavigate() },
+                onClick = onNavigateToShare,
             )
 
             Spacer(modifier = Modifier.weight(1f))

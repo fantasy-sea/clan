@@ -59,14 +59,6 @@ import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.ui.components.CountdownRing
 
 private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
-
-@Preview
-@Composable
-fun ShareScreenPreview(){
-    ShareScreen({},{})
-}
-
-
 @Composable
 fun ShareScreen(
     onNavigate: (id:Long) -> Unit,

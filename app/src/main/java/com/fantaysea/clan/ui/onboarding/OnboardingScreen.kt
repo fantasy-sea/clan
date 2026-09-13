@@ -22,12 +22,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.core.navigation.Onboarding
 import com.fantaysea.clan.ui.theme.ClanTheme
 import kotlinx.coroutines.launch
 
@@ -37,11 +39,11 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(
-    pages: List<OnboardingPage>,
     onComplete: () -> Unit,
     modifier: Modifier = Modifier,
     userScrollEnabled: Boolean = true,
 ) {
+    val pages = remember { onboardingPages() }
     if (pages.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -109,11 +111,13 @@ private fun OnboardingHeader(
                 .padding(start = 24.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "$currentStep/$totalSteps",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (currentStep != totalSteps) {
+                Text(
+                    text = "$currentStep/$totalSteps",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
             // 最后一页按钮已变成"开始使用", 不再需要"跳过"
             if (currentStep < totalSteps) {
@@ -173,16 +177,5 @@ private fun OnboardingFooter(
                 style = MaterialTheme.typography.titleMedium,
             )
         }
-    }
-}
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-private fun OnboardingScreenPreview() {
-    ClanTheme {
-        OnboardingScreen(
-            pages = onboardingPages(),
-            onComplete = {},
-        )
     }
 }

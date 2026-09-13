@@ -26,9 +26,7 @@ fun App(appPreferences: AppPreferences) {
             model = Build.MODEL,
         )
     }
-    CompositionLocalProvider(
-        LocalAppPreferences provides appPreferences
-    ) {
+    CompositionLocalProvider(LocalAppPreferences provides appPreferences) {
         //其中所有Composable都能够访问LocalAppPreferences
         AppNavigation()
     }
