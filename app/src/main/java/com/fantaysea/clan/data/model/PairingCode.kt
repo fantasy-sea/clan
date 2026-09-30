@@ -9,7 +9,7 @@ data class PairingCode(
     /** 6 位数字匹配码 */
     val code: String,
     /** 生成该码的被控端设备 id */
-    val deviceId: Long,
+    val deviceId: String,
     /** 过期时间(epoch millis) */
     val expiresAt: Long,
     /** 是否已被使用(配对成功/校验通过后置 true) */

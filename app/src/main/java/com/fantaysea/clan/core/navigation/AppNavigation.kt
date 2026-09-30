@@ -16,7 +16,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.fantaysea.clan.LocalAppPreferences
+import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.ui.control.ControlHomeScreen
 import com.fantaysea.clan.ui.control.SessionDeviceGate
 import com.fantaysea.clan.ui.home.HomeMenuScreen
@@ -28,7 +30,7 @@ import kotlinx.coroutines.launch
 
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(repository: ClanRepository) {
     val navController = rememberNavController()
     val appPreferences = LocalAppPreferences.current
     val coroutineScope = rememberCoroutineScope()
@@ -80,9 +82,8 @@ fun AppNavigation() {
                 popExitTransition = homePopExit,
             ) {
                 ControlHomeScreen(
-                    onNavigate = {
-                        navController.navigate(HomeControl)
-                    },
+                    repository = repository,
+                    onNavigate = { deviceId -> navController.navigate(HomeControlSession(deviceId)) },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -93,9 +94,8 @@ fun AppNavigation() {
                 popExitTransition = homePopExit,
             ) {
                 ShareScreen(
-                    onNavigate = {
-                        navController.navigate(HomeShare)
-                    },
+                    repository = repository,
+                    onNavigate = { deviceId -> navController.navigate(HomeControlledSession(deviceId)) },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -105,12 +105,12 @@ fun AppNavigation() {
                 popEnterTransition = homePopEnter,
                 popExitTransition = homePopExit,
             ) { entry ->
-                val deviceId =
-                    entry.arguments?.getLong("deviceID") ?: return@composable
+                val deviceId = entry.toRoute<HomeControlSession>().deviceId
                 SessionDeviceGate(
+                    repository = repository,
                     deviceId = deviceId,
                     onBack = { navController.popBackStack() }) { peer ->
-                    ControlSessionScreen(peer = peer, onBack = { navController.popBackStack() })
+                    ControlSessionScreen(repository = repository, peer = peer, onBack = { navController.popBackStack() })
                 }
             }
             composable<HomeControlledSession>(
@@ -119,12 +119,12 @@ fun AppNavigation() {
                 popEnterTransition = homePopEnter,
                 popExitTransition = homePopExit,
             ) { entry ->
-                val deviceId =
-                    entry.arguments?.getLong("deviceID") ?: return@composable
+                val deviceId = entry.toRoute<HomeControlledSession>().deviceId
                 SessionDeviceGate(
+                    repository = repository,
                     deviceId = deviceId,
                     onBack = { navController.popBackStack() }) { peer ->
-                    ControlledSessionScreen(peer = peer, onBack = { navController.popBackStack() })
+                    ControlledSessionScreen(repository = repository, peer = peer, onBack = { navController.popBackStack() })
                 }
             }
 

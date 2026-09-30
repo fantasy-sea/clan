@@ -9,8 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.repository.ClanRepository
 
 /**
  * 会话目的地设备解析门: 按 deviceId 从仓库解析 [Device] 后再渲染会话页。
@@ -18,14 +18,15 @@ import com.fantaysea.clan.data.model.Device
  */
 @Composable
 fun SessionDeviceGate(
-    deviceId: Long,
+    repository: ClanRepository,
+    deviceId: String,
     onBack: () -> Unit,
     content: @Composable (Device) -> Unit,
 ) {
     var device by remember { mutableStateOf<Device?>(null) }
     LaunchedEffect(deviceId) {
         device = null
-        val found = MockServer.instance.findDevice(deviceId)
+        val found = runCatching { repository.findDevice(deviceId) }.getOrNull()
         if (found == null) {
             onBack()
         } else {

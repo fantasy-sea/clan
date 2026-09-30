@@ -19,6 +19,6 @@ data object HomeControl
 @Serializable
 data object HomeShare
 @Serializable
-data class HomeControlSession(val deviceId: Long)
+data class HomeControlSession(val deviceId: String)
 @Serializable
-data class HomeControlledSession(val deviceId: Long)
+data class HomeControlledSession(val deviceId: String)

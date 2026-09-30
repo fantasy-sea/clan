@@ -43,7 +43,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.RemoteEvent
@@ -56,10 +55,10 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ControlledSessionScreen(
+    repository: ClanRepository,
     peer: Device,
     onBack: () -> Unit,
 ) {
-    val repository: ClanRepository = MockServer.instance
     val scope = rememberCoroutineScope()
     var showStopConfirm by remember { mutableStateOf(false) }
     var seconds by remember { mutableStateOf(0) }

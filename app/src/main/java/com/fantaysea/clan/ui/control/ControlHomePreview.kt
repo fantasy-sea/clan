@@ -11,22 +11,22 @@ import com.fantaysea.clan.ui.theme.ClanTheme
 private val previewDeviceList = listOf(
     PairedDevice(
         device = Device(
-            id = 1L,
-            deviceToken = "preview-mom",
+            id = "dev_preview_mom",
             deviceName = "妈妈的手机",
             platform = "Android",
             model = "HUAWEI Mate 40",
+            androidVersion = "12",
             lastOnlineAt = 0L,
             createdAt = 0L,
         ),
         online = true,
     ), PairedDevice(
         device = Device(
-            id = 2L,
-            deviceToken = "preview-dad",
+            id = "dev_preview_dad",
             deviceName = "爸爸的手机",
             platform = "Android",
             model = "Xiaomi 12",
+            androidVersion = "12",
             lastOnlineAt = null,
             createdAt = 0L,
         ),

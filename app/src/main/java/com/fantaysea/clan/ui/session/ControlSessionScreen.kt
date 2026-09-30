@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -51,7 +51,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.RemoteEvent
@@ -65,10 +64,10 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ControlSessionScreen(
+    repository: ClanRepository,
     peer: Device,
     onBack: () -> Unit,
 ) {
-    val repository: ClanRepository = MockServer.instance
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showEndConfirm by remember { mutableStateOf(false) }
@@ -150,7 +149,7 @@ fun ControlSessionScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                ControlPadButton(Icons.Filled.KeyboardArrowLeft, "返回") {
+                ControlPadButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "返回") {
                     scope.launch { snackbarHostState.showSnackbar("已发送「返回」指令(模拟)") }
                 }
                 ControlPadButton(Icons.Filled.Home, "主页") {

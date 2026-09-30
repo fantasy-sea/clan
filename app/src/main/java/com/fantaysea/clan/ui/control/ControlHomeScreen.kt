@@ -58,16 +58,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.fantaysea.clan.data.mock.MockServer
+import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.PairedDevice
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 @Composable
 internal fun ControlHomeScreen(
-    onNavigate: () -> Unit = {},
+    repository: ClanRepository,
+    onNavigate: (String) -> Unit = {},
     onBack: () -> Unit = {},
 ) {
-    val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(MockServer.instance) }
+    val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(repository) }
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -76,7 +77,7 @@ internal fun ControlHomeScreen(
     LaunchedEffect(state.controlSessionPeer) {
         val peer = state.controlSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate()
+        onNavigate(peer.id)
     }
 
     LaunchedEffect(Unit) {
@@ -143,7 +144,10 @@ internal fun ControlHomeScreenContent(
                         )
                     }
                 }
-                TextButton(onClick = onOpenPairDialog) {
+                TextButton(
+                    onClick = onOpenPairDialog,
+                    enabled = state.pageState !is DeviceListState.Unavailable,
+                ) {
                     Icon(
                         Icons.Filled.Add,
                         contentDescription = null,
@@ -164,6 +168,7 @@ internal fun ControlHomeScreenContent(
                 is DeviceListState.Loading -> LoadingView()
                 is DeviceListState.Error -> ErrorView(pageState.message, onRetry = onRetry)
                 is DeviceListState.Empty -> EmptyView(onAdd = onOpenPairDialog)
+                is DeviceListState.Unavailable -> UnavailableView()
                 is DeviceListState.Success ->
                     DeviceList(
                         devices = pageState.devices,
@@ -504,5 +509,28 @@ private fun relativeTime(epoch: Long?): String {
         minutes < 60 -> "${minutes} 分钟前在线"
         diff < 24L * 3600_000 -> "${diff / 3600_000} 小时前在线"
         else -> "${diff / (24L * 3600_000)} 天前在线"
+    }
+}
+
+@Composable
+private fun UnavailableView() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.PhoneAndroid,
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("服务端暂未支持", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "设备绑定、配对和远程控制功能尚未开放",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

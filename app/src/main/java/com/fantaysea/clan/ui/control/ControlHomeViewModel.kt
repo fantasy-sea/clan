@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
+import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.DeviceOfflineException
 import com.fantaysea.clan.data.repository.ExpiredPairingCodeException
 import com.fantaysea.clan.data.repository.InvalidPairingCodeException
@@ -42,6 +43,7 @@ sealed interface DeviceListState {
     ) : DeviceListState
 
     data object Empty : DeviceListState
+    data object Unavailable : DeviceListState
     data class Success(
         val devices: List<PairedDevice>
     ) : DeviceListState
@@ -68,11 +70,19 @@ class ControlHomeViewModel(
     private val handled = mutableSetOf<String>()
 
     init {
-        viewModelScope.launch { refresh() }
+        if (BackendCapability.DEVICE_BINDINGS in repository.capabilities) {
+            viewModelScope.launch { refresh() }
+        } else {
+            _uiState.update { it.copy(pageState = DeviceListState.Unavailable) }
+        }
         viewModelScope.launch { observeEvents() }
     }
 
     private suspend fun refresh() {
+        if (BackendCapability.DEVICE_BINDINGS !in repository.capabilities) {
+            _uiState.update { it.copy(pageState = DeviceListState.Unavailable) }
+            return
+        }
         _uiState.update {
             it.copy(pageState = DeviceListState.Loading)
         }
@@ -150,6 +160,10 @@ class ControlHomeViewModel(
 
     // ── 配对弹窗 ─────────────────────────────────────────────
     fun openPairDialog() {
+        if (BackendCapability.PAIRING !in repository.capabilities) {
+            _messages.tryEmit("服务端暂未支持")
+            return
+        }
         _uiState.update {
             it.copy(
                 pairDialogVisible = true,
