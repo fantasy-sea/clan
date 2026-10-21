@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.core.navigation.LocalNavigator
 import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
@@ -64,10 +65,8 @@ import kotlinx.coroutines.launch
  *   点击/滑动/按键通过数据通道发送给被控端执行。
  */
 @Composable
-fun ControlSessionScreen(
-    peer: Device,
-    onBack: () -> Unit,
-) {
+fun ControlSessionScreen(peer: Device) {
+    val navigator = LocalNavigator.current
     val repository: ClanRepository = MockServer.instance
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -75,7 +74,7 @@ fun ControlSessionScreen(
     var seconds by remember { mutableStateOf(0) }
 
     BackHandler { showEndConfirm = true }
-    RememberSessionEnd(repository) { onBack() }
+    RememberSessionEnd(repository) { navigator.back() }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -183,7 +182,7 @@ fun ControlSessionScreen(
                 TextButton(onClick = {
                     showEndConfirm = false
                     scope.launch { repository.endSession(peer.id) }
-                    onBack()
+                    navigator.back()
                 }) { Text("结束") }
             },
             dismissButton = {

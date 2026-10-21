@@ -8,6 +8,7 @@ import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.ui.theme.ClanTheme
 
 class MainActivity : ComponentActivity() {
+    //初始化appPreferences用于本地存储
     private val appPreferences by lazy { AppPreferences(applicationContext) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

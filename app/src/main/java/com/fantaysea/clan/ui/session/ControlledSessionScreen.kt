@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.core.navigation.LocalNavigator
 import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
@@ -55,17 +56,15 @@ import kotlinx.coroutines.launch
  * TODO(真实实现): 此处由 ScreenCaptureService + WebRTC 持续发送屏幕流。
  */
 @Composable
-fun ControlledSessionScreen(
-    peer: Device,
-    onBack: () -> Unit,
-) {
+fun ControlledSessionScreen(peer: Device) {
+    val navigator = LocalNavigator.current
     val repository: ClanRepository = MockServer.instance
     val scope = rememberCoroutineScope()
     var showStopConfirm by remember { mutableStateOf(false) }
     var seconds by remember { mutableStateOf(0) }
 
     BackHandler { showStopConfirm = true }
-    RememberSessionEnd(repository) { onBack() }
+    RememberSessionEnd(repository) { navigator.back() }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -139,7 +138,7 @@ fun ControlledSessionScreen(
                 TextButton(onClick = {
                     showStopConfirm = false
                     scope.launch { repository.endSession(peer.id) }
-                    onBack()
+                    navigator.back()
                 }) { Text("停止", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {

@@ -9,20 +9,26 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +55,7 @@ data class OnboardingPage(
  * 当前 4 页: 欢迎 → 功能说明 → 通知权限 → 屏幕捕获授权(MediaProjection)。
  * 视觉由你自行绘制: 直接替换各页 content 中的实现即可, 框架不关心页面内部。
  */
-fun onboardingPages(): List<OnboardingPage> = buildList {
+internal fun onboardingPages(): List<OnboardingPage> = buildList {
     // ── 第 1 步: 欢迎与产品简介 ────
     add(
         OnboardingPage {
@@ -88,7 +94,7 @@ fun onboardingPages(): List<OnboardingPage> = buildList {
  * 整体可滚动, 适配小屏。各页可直接复用或完全重绘。
  */
 @Composable
-private fun SamplePage(title: String, description: String) {
+internal fun SamplePage(title: String, description: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,7 +140,7 @@ private fun SamplePage(title: String, description: String) {
  * 结构 = 说明文案 + 授权按钮 + 授权状态。其他运行时权限照此模式替换即可。
  */
 @Composable
-private fun NotificationPermissionPage() {
+internal fun NotificationPermissionPage() {
     var granted by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -195,7 +201,7 @@ private fun NotificationPermissionPage() {
  * 真正的投屏能力需要后续的 MediaProjection 前台服务来消费这个 Intent(服务尚未实现)。
  */
 @Composable
-private fun MediaProjectionPermissionPage() {
+internal fun MediaProjectionPermissionPage() {
     val context = LocalContext.current
     var authorized by remember { mutableStateOf(false) }
 
@@ -254,5 +260,87 @@ private fun MediaProjectionPermissionPage() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+
+/** 上方固定区域: 步骤文字 + 进度圆点 + 跳过按钮 */
+@Composable
+internal fun OnboardingHeader(
+    currentStep: Int,
+    totalSteps: Int,
+    onSkip: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "$currentStep/$totalSteps",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            // 最后一页按钮已变成"开始使用", 不再需要"跳过"
+            if (currentStep < totalSteps) {
+                TextButton(onClick = onSkip) {
+                    Text("跳过")
+                }
+            }
+        }
+
+    }
+}
+
+/** 下方固定按钮: 下一步 → 开始使用 */
+@Composable
+internal fun OnboardingFooter(
+    isLastPage: Boolean,
+    currentStep: Int,
+    totalSteps: Int,
+    onNext: () -> Unit,
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement
+                .spacedBy(space = 8.dp, alignment = Alignment.CenterHorizontally)
+        ) {
+            repeat(totalSteps) { index ->
+                val isCurrent = index == currentStep - 1
+                Box(
+                    modifier = Modifier
+                        .height(8.dp)
+                        .width(if (isCurrent) 24.dp else 8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isCurrent) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                )
+            }
+        }
+        Button(
+            onClick = onNext,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text(
+                text = if (isLastPage) "开始使用" else "下一步",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
     }
 }

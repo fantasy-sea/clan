@@ -45,13 +45,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.LocalNavigator
 
 /**
  * 首页菜单: 品牌区 + 两个入口大卡片(远程控制 / 共享屏幕)。
  * 暖色渐变背景 + 装饰光斑 + 交错入场 + 按压缩放。
  */
 @Composable
-fun HomeMenuScreen(onNavigate: (HomeDestination) -> Unit) {
+fun HomeMenuScreen() {
+    val navigator = LocalNavigator.current
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
 
@@ -149,7 +151,7 @@ fun HomeMenuScreen(onNavigate: (HomeDestination) -> Unit) {
                     MaterialTheme.colorScheme.primaryContainer,
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
                 ),
-                onClick = { onNavigate(HomeDestination.ControlHome) },
+                onClick = { navigator.navigateTo(HomeDestination.ControlHome) },
             )
             Spacer(modifier = Modifier.height(20.dp))
             MenuCard(
@@ -162,7 +164,7 @@ fun HomeMenuScreen(onNavigate: (HomeDestination) -> Unit) {
                     MaterialTheme.colorScheme.tertiaryContainer,
                     MaterialTheme.colorScheme.tertiary.copy(alpha = 0.75f),
                 ),
-                onClick = { onNavigate(HomeDestination.Share) },
+                onClick = { navigator.navigateTo(HomeDestination.Share) },
             )
 
             Spacer(modifier = Modifier.weight(1f))

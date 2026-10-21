@@ -18,12 +18,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
-import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
-import androidx.navigation.navArgument
+import androidx.navigation.toRoute
 import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.ui.control.ControlHomeScreen
@@ -32,30 +30,6 @@ import com.fantaysea.clan.ui.session.ControlledSessionScreen
 import com.fantaysea.clan.ui.session.ControlSessionScreen
 import com.fantaysea.clan.ui.share.ShareScreen
 
-/** 顶层目的地(各子屏的导航契约, 由 [homeGraph] 映射为 nav 路由) */
-sealed interface HomeDestination {
-    data object Home : HomeDestination
-    data object ControlHome : HomeDestination
-    data object Share : HomeDestination
-    data class ControlSession(val deviceId: Long) : HomeDestination
-    data class ControlledSession(val deviceId: Long) : HomeDestination
-}
-
-/** home 域路由表(嵌套图) */
-object HomeRoute {
-    const val GRAPH = "homeGraph"
-    const val HOME = "home"
-    const val CONTROL_HOME = "controlHome"
-    const val SHARE = "share"
-    const val CONTROL_SESSION = "controlSession"
-    const val CONTROLLED_SESSION = "controlledSession"
-    const val DEVICE_ID_ARG = "deviceId"
-
-    /** 会话路由(带 deviceId 参数) */
-    fun controlSession(deviceId: Long) = "$CONTROL_SESSION/$deviceId"
-    fun controlledSession(deviceId: Long) = "$CONTROLLED_SESSION/$deviceId"
-}
-
 /** home 域转场(滑动 + 淡入淡出, 与原先 AnimatedContent 观感一致) */
 private val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
     slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(320))
@@ -63,92 +37,69 @@ private val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> E
 private val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
     slideOutHorizontally(tween(320)) { -it / 4 } + fadeOut(tween(240))
 }
-private val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideInHorizontally(tween(320)) { -it / 4 } + fadeIn(tween(320))
-}
+private val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
+    {
+        slideInHorizontally(tween(320)) { -it / 4 } + fadeIn(tween(320))
+    }
 private val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
     slideOutHorizontally(tween(320)) { it / 4 } + fadeOut(tween(240))
 }
 
 /**
  * home 域嵌套导航图: 首页 / 远程控制 / 共享屏幕 / 控制页 / 被控页。
+ * 目的地与参数由 [HomeDestination] 的类型序列化生成, 子屏只依赖目的地类型。
+ * 跳转与返回统一走 [LocalNavigator](由 AppNavigation 注入), 这里不再透传导航回调。
  * 返回逻辑由各子屏自行注册 BackHandler 处理(会话页返回前有确认);
  * 图起点(home)的系统返回由 NavHost 判定不拦截(compose 栈仅剩一项), 交由系统退出应用。
  */
-fun NavGraphBuilder.homeGraph(navController: NavController) {
-    navigation(
-        startDestination = HomeRoute.HOME,
-        route = HomeRoute.GRAPH,
-    ) {
-        composable(
-            route = HomeRoute.HOME,
+fun NavGraphBuilder.homeGraph() {
+    navigation<HomeGraph>(startDestination = HomeDestination.Home) {
+        composable<HomeDestination.Home>(
             enterTransition = homeEnter,
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit,
         ) {
-            HomeMenuScreen(onNavigate = { navigateTo(navController, it) })
+            HomeMenuScreen()
         }
-        composable(
-            route = HomeRoute.CONTROL_HOME,
+        composable<HomeDestination.ControlHome>(
             enterTransition = homeEnter,
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit,
         ) {
-            ControlHomeScreen(
-                onNavigate = { navigateTo(navController, it) },
-                onBack = { navController.popBackStack() },
-            )
+            ControlHomeScreen()
         }
-        composable(
-            route = HomeRoute.SHARE,
+        composable<HomeDestination.Share>(
             enterTransition = homeEnter,
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit,
         ) {
-            ShareScreen(
-                onNavigate = { navigateTo(navController, it) },
-                onBack = { navController.popBackStack() },
-            )
+            ShareScreen()
         }
-        composable(
-            route = "${HomeRoute.CONTROL_SESSION}/{${HomeRoute.DEVICE_ID_ARG}}",
-            arguments = listOf(navArgument(HomeRoute.DEVICE_ID_ARG) { type = NavType.LongType }),
+        composable<HomeDestination.ControlSession>(
             enterTransition = homeEnter,
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit,
         ) { entry ->
-            val deviceId = entry.arguments?.getLong(HomeRoute.DEVICE_ID_ARG) ?: return@composable
-            SessionDeviceGate(deviceId = deviceId, onBack = { navController.popBackStack() }) { peer ->
-                ControlSessionScreen(peer = peer, onBack = { navController.popBackStack() })
+            val deviceId = entry.toRoute<HomeDestination.ControlSession>().deviceId
+            SessionDeviceGate(deviceId = deviceId) { peer ->
+                ControlSessionScreen(peer = peer)
             }
         }
-        composable(
-            route = "${HomeRoute.CONTROLLED_SESSION}/{${HomeRoute.DEVICE_ID_ARG}}",
-            arguments = listOf(navArgument(HomeRoute.DEVICE_ID_ARG) { type = NavType.LongType }),
+        composable<HomeDestination.ControlledSession>(
             enterTransition = homeEnter,
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit,
         ) { entry ->
-            val deviceId = entry.arguments?.getLong(HomeRoute.DEVICE_ID_ARG) ?: return@composable
-            SessionDeviceGate(deviceId = deviceId, onBack = { navController.popBackStack() }) { peer ->
-                ControlledSessionScreen(peer = peer, onBack = { navController.popBackStack() })
+            val deviceId = entry.toRoute<HomeDestination.ControlledSession>().deviceId
+            SessionDeviceGate(deviceId = deviceId) { peer ->
+                ControlledSessionScreen(peer = peer)
             }
         }
-    }
-}
-
-private fun navigateTo(navController: NavController, dest: HomeDestination) {
-    when (dest) {
-        HomeDestination.Home -> Unit // 首页即图起点, 无需导航
-        HomeDestination.ControlHome -> navController.navigate(HomeRoute.CONTROL_HOME)
-        HomeDestination.Share -> navController.navigate(HomeRoute.SHARE)
-        is HomeDestination.ControlSession -> navController.navigate(HomeRoute.controlSession(dest.deviceId))
-        is HomeDestination.ControlledSession -> navController.navigate(HomeRoute.controlledSession(dest.deviceId))
     }
 }
 
@@ -159,15 +110,15 @@ private fun navigateTo(navController: NavController, dest: HomeDestination) {
 @Composable
 private fun SessionDeviceGate(
     deviceId: Long,
-    onBack: () -> Unit,
     content: @Composable (Device) -> Unit,
 ) {
+    val navigator = LocalNavigator.current
     var device by remember { mutableStateOf<Device?>(null) }
     LaunchedEffect(deviceId) {
         device = null
         val found = MockServer.instance.findDevice(deviceId)
         if (found == null) {
-            onBack()
+            navigator.back()
         } else {
             device = found
         }

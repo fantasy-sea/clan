@@ -58,33 +58,32 @@ import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.ui.components.CountdownRing
 import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.LocalNavigator
 
 private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
 
 @Preview
 @Composable
 fun ShareScreenPreview(){
-    ShareScreen({},{})
+    ShareScreen()
 }
 
 
 @Composable
-fun ShareScreen(
-    onNavigate: (HomeDestination) -> Unit,
-    onBack: () -> Unit,
-) {
+fun ShareScreen() {
+    val navigator = LocalNavigator.current
     val context = LocalContext.current
     val vm: ShareViewModel = viewModel { ShareViewModel(MockServer.instance) }
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val captureManager = remember { ScreenCaptureManager(context.applicationContext) }
 
-    BackHandler { onBack() }
+    BackHandler { navigator.back() }
 
     LaunchedEffect(state.controlledSessionPeer) {
         val peer = state.controlledSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(HomeDestination.ControlledSession(peer.id))
+        navigator.navigateTo(HomeDestination.ControlledSession(peer.id))
     }
 
     LaunchedEffect(Unit) {
@@ -111,7 +110,7 @@ fun ShareScreen(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = { navigator.back() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                 }
                 Column(modifier = Modifier.weight(1f)) {

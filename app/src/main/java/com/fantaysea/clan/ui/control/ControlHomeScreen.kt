@@ -63,6 +63,7 @@ import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.PairedDevice
 import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.LocalNavigator
 import com.fantaysea.clan.ui.theme.ClanTheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -171,20 +172,18 @@ private fun ControlHomePreviewContent(state: ControlHomeUiState) {
 }
 
 @Composable
-fun ControlHomeScreen(
-    onNavigate: (HomeDestination) -> Unit,
-    onBack: () -> Unit,
-) {
+fun ControlHomeScreen() {
+    val navigator = LocalNavigator.current
     val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(MockServer.instance) }
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    BackHandler { onBack() }
+    BackHandler { navigator.back() }
 
     LaunchedEffect(state.controlSessionPeer) {
         val peer = state.controlSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        onNavigate(HomeDestination.ControlSession(peer.id))
+        navigator.navigateTo(HomeDestination.ControlSession(peer.id))
     }
 
     LaunchedEffect(Unit) {
@@ -194,7 +193,7 @@ fun ControlHomeScreen(
     ControlHomeScreenContent(
         state = state,
         snackbarHostState = snackbarHostState,
-        onBack = onBack,
+        onBack = navigator::back,
         onOpenPairDialog = vm::openPairDialog,
         onRetry = vm::retry,
         onPairDialogDismiss = vm::closePairDialog,
