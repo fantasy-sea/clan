@@ -43,8 +43,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+<<<<<<< HEAD
 import com.fantaysea.clan.core.navigation.LocalNavigator
 import com.fantaysea.clan.data.mock.MockServer
+=======
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.RemoteEvent
@@ -56,9 +59,17 @@ import kotlinx.coroutines.launch
  * TODO(真实实现): 此处由 ScreenCaptureService + WebRTC 持续发送屏幕流。
  */
 @Composable
+<<<<<<< HEAD
 fun ControlledSessionScreen(peer: Device) {
     val navigator = LocalNavigator.current
     val repository: ClanRepository = MockServer.instance
+=======
+fun ControlledSessionScreen(
+    repository: ClanRepository,
+    peer: Device,
+    onBack: () -> Unit,
+) {
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
     val scope = rememberCoroutineScope()
     var showStopConfirm by remember { mutableStateOf(false) }
     var seconds by remember { mutableStateOf(0) }

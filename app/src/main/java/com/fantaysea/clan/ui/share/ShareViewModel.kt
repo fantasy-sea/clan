@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.fantaysea.clan.data.PairingCodeGenerator
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
+import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.RemoteEvent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,7 +28,8 @@ data class ShareUiState(
     val deviceName: String = "",
     val model: String = "",
     val platform: String = "",
-    val deviceTokenShort: String = "",
+    val deviceIdShort: String = "",
+    val pairingAvailable: Boolean = true,
     val code: String = "",
     val expiresAt: Long = 0L,
     val remainingMillis: Long = 0L,
@@ -42,7 +44,9 @@ class ShareViewModel(
     private val repository: ClanRepository,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ShareUiState())
+    private val _uiState = MutableStateFlow(
+        ShareUiState(pairingAvailable = BackendCapability.PAIRING in repository.capabilities),
+    )
     val uiState: StateFlow<ShareUiState> = _uiState.asStateFlow()
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -59,7 +63,7 @@ class ShareViewModel(
                         deviceName = self.deviceName,
                         model = self.model,
                         platform = self.platform,
-                        deviceTokenShort = self.deviceToken.take(8),
+                        deviceIdShort = self.id.takeLast(8),
                     )
                 }
             }
@@ -69,6 +73,7 @@ class ShareViewModel(
 
     /** 屏幕共享授权结果(授权或拒绝) */
     fun onPermissionResult(granted: Boolean) {
+        if (!_uiState.value.pairingAvailable) return
         _uiState.update {
             it.copy(permissionState = if (granted) SharePermissionState.Granted else SharePermissionState.Denied)
         }

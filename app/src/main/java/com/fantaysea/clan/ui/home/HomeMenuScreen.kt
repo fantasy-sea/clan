@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,8 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.ScreenShare
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,20 +42,36 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+<<<<<<< HEAD
 import com.fantaysea.clan.core.navigation.HomeDestination
 import com.fantaysea.clan.core.navigation.LocalNavigator
+=======
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
 
 /**
  * 首页菜单: 品牌区 + 两个入口大卡片(远程控制 / 共享屏幕)。
  * 暖色渐变背景 + 装饰光斑 + 交错入场 + 按压缩放。
  */
 @Composable
+<<<<<<< HEAD
 fun HomeMenuScreen() {
     val navigator = LocalNavigator.current
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
 
+=======
+fun HomeMenuScreen(
+    onNavigateToControl: () -> Unit={},
+    onNavigateToShare: () -> Unit={},
+    isPlayAnimation: Boolean = true,
+) {
+    var entered by remember(isPlayAnimation) { mutableStateOf(!isPlayAnimation) }
+    LaunchedEffect(Unit) {
+        if (isPlayAnimation) entered = true
+    }
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -98,7 +113,6 @@ fun HomeMenuScreen() {
                 visible = entered,
                 enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 8 },
             ) {
-                Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
@@ -115,7 +129,7 @@ fun HomeMenuScreen() {
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.ScreenShare,
+                                imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(28.dp),
@@ -135,11 +149,8 @@ fun HomeMenuScreen() {
                             )
                         }
                     }
-                }
             }
-
             Spacer(modifier = Modifier.height(40.dp))
-
             // 入口卡片(交错入场)
             MenuCard(
                 visible = entered,
@@ -151,20 +162,28 @@ fun HomeMenuScreen() {
                     MaterialTheme.colorScheme.primaryContainer,
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
                 ),
+<<<<<<< HEAD
                 onClick = { navigator.navigateTo(HomeDestination.ControlHome) },
+=======
+                onClick = onNavigateToControl,
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
             )
             Spacer(modifier = Modifier.height(20.dp))
             MenuCard(
                 visible = entered,
                 delay = 240,
-                icon = Icons.Outlined.ScreenShare,
+                icon = Icons.AutoMirrored.Outlined.ScreenShare,
                 title = "共享屏幕",
                 description = "让家人远程协助本机",
                 gradient = listOf(
                     MaterialTheme.colorScheme.tertiaryContainer,
                     MaterialTheme.colorScheme.tertiary.copy(alpha = 0.75f),
                 ),
+<<<<<<< HEAD
                 onClick = { navigator.navigateTo(HomeDestination.Share) },
+=======
+                onClick = onNavigateToShare,
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
             )
 
             Spacer(modifier = Modifier.weight(1f))

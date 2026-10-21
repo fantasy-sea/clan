@@ -4,6 +4,8 @@ import com.fantaysea.clan.data.PairingCodeGenerator
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.model.PairingCode
 import com.fantaysea.clan.data.repository.ClanRepository
+import com.fantaysea.clan.data.repository.BackendCapability
+import com.fantaysea.clan.data.repository.DeviceRegistration
 import com.fantaysea.clan.data.repository.DeviceOfflineException
 import com.fantaysea.clan.data.repository.ExpiredPairingCodeException
 import com.fantaysea.clan.data.repository.InvalidPairingCodeException
@@ -38,12 +40,12 @@ class MockServer(
 
     companion object {
         const val DEFAULT_DELAY = 300L
-        const val SELF_ID = 100_000L
-        /** 全局单例, 供 UI 默认注入 */
-        val instance: ClanRepository by lazy { MockServer() }
+        const val SELF_ID = "dev_mock_self"
     }
 
     private val now: Long get() = System.currentTimeMillis()
+
+    override val capabilities: Set<BackendCapability> = BackendCapability.entries.toSet()
 
     private val _self = MutableStateFlow<Device?>(null)
     override val self: StateFlow<Device?> = _self.asStateFlow()
@@ -54,7 +56,7 @@ class MockServer(
     // 已配对设备(本机视角)
     private val devices = mutableStateListOf(seedDevices())
     // 在线设备 id(模拟心跳)
-    private val onlineIds = mutableSetOf(1L)
+    private val onlineIds = mutableSetOf("dev_mock_mom")
     // 当前生效的配对码(被控端=本机生成)
     private var activeCode: PairingCode? = null
     // 待应答的配对/控制请求
@@ -66,26 +68,26 @@ class MockServer(
     private val idSeq = AtomicInteger(100)
     private val peerSeq = AtomicInteger(0)
 
-    private fun nextId(): Long = idSeq.incrementAndGet().toLong()
+    private fun nextDeviceId(): String = "dev_mock_${idSeq.incrementAndGet()}"
     private fun newRequestId(): String = UUID.randomUUID().toString()
     private suspend fun simulateLatency() { if (delayMillis > 0) delay(delayMillis) }
 
     private fun seedDevices(): List<Device> = listOf(
         Device(
-            id = 1L,
-            deviceToken = "demo-mom-001",
+            id = "dev_mock_mom",
             deviceName = "妈妈的手机",
             platform = "Android",
             model = "HUAWEI Mate 40",
+            androidVersion = "12",
             lastOnlineAt = now,
             createdAt = now - 30L * 24 * 3600_000,
         ),
         Device(
-            id = 2L,
-            deviceToken = "demo-dad-002",
+            id = "dev_mock_dad",
             deviceName = "爸爸的手机",
             platform = "Android",
             model = "Xiaomi 12",
+            androidVersion = "12",
             lastOnlineAt = now - 3L * 3600_000,
             createdAt = now - 30L * 24 * 3600_000,
         ),
@@ -95,27 +97,27 @@ class MockServer(
     private fun fabricatePeer(): Device {
         val n = peerSeq.incrementAndGet()
         return Device(
-            id = nextId(),
-            deviceToken = "demo-peer-$n",
+            id = nextDeviceId(),
             deviceName = if (n == 1) "家人的手机" else "家人的手机·$n",
             platform = "Android",
             model = "远程设备",
+            androidVersion = "12",
             lastOnlineAt = now,
             createdAt = now,
         )
     }
 
-    override suspend fun registerSelf(deviceToken: String, deviceName: String, platform: String, model: String) {
+    override suspend fun initializeSelf(registration: DeviceRegistration): Device {
         simulateLatency()
-        _self.value = Device(
+        return Device(
             id = SELF_ID,
-            deviceToken = deviceToken,
-            deviceName = deviceName,
-            platform = platform,
-            model = model,
+            deviceName = registration.deviceName,
+            platform = "ANDROID",
+            model = registration.model,
+            androidVersion = registration.androidVersion,
             lastOnlineAt = now,
             createdAt = now,
-        )
+        ).also { _self.value = it }
     }
 
     override suspend fun fetchDevices(): List<PairedDevice> {
@@ -123,13 +125,13 @@ class MockServer(
         return devices.map { PairedDevice(it, it.id in onlineIds) }
     }
 
-    override suspend fun findDevice(deviceId: Long): Device? {
+    override suspend fun findDevice(deviceId: String): Device? {
         simulateLatency()
         return devices.firstOrNull { it.id == deviceId }
             ?: _self.value?.takeIf { it.id == deviceId }
     }
 
-    override suspend fun unbindDevice(deviceId: Long) {
+    override suspend fun unbindDevice(deviceId: String) {
         simulateLatency()
         devices.removeAll { it.id == deviceId }
         onlineIds.remove(deviceId)
@@ -144,7 +146,7 @@ class MockServer(
             code = PairingCodeGenerator.generate()
         }
         val created = PairingCode(
-            id = nextId(),
+            id = idSeq.incrementAndGet().toLong(),
             code = code,
             deviceId = _self.value?.id ?: SELF_ID,
             expiresAt = now + PairingCodeGenerator.VALIDITY_MS,
@@ -192,7 +194,7 @@ class MockServer(
         _events.tryEmit(RemoteEvent.PairingSucceeded(requestId = requestId, pairedDevice = peer))
     }
 
-    override suspend fun sendControlRequest(deviceId: Long): String {
+    override suspend fun sendControlRequest(deviceId: String): String {
         simulateLatency()
         val target = devices.firstOrNull { it.id == deviceId }
             ?: throw IllegalArgumentException("设备不存在")
@@ -223,7 +225,7 @@ class MockServer(
         )
     }
 
-    override suspend fun endSession(peerDeviceId: Long) {
+    override suspend fun endSession(peerDeviceId: String) {
         simulateLatency()
         val peer = devices.firstOrNull { it.id == peerDeviceId } ?: _self.value ?: return
         _events.tryEmit(RemoteEvent.SessionEnded(peer = peer))

@@ -4,6 +4,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val configuredClanApiBaseUrl = providers.gradleProperty("CLAN_API_BASE_URL")
+    .map { if (it.endsWith('/')) it else "$it/" }
+val debugClanApiBaseUrl = configuredClanApiBaseUrl.orElse("http://10.0.2.2:8080/")
+val releaseClanApiBaseUrl = configuredClanApiBaseUrl.orElse("https://clan.invalid/")
+
 android {
     namespace = "com.fantaysea.clan"
     compileSdk {
@@ -21,7 +26,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "CLAN_API_BASE_URL", "\"${debugClanApiBaseUrl.get()}\"")
+        }
         release {
+            buildConfigField("String", "CLAN_API_BASE_URL", "\"${releaseClanApiBaseUrl.get()}\"")
             optimization {
                 enable = false
             }
@@ -33,6 +42,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -49,8 +59,15 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.navigation.compose)
+<<<<<<< HEAD
+=======
+    implementation(libs.retrofit.core)
+    implementation(libs.retrofit.kotlinx.serialization)
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

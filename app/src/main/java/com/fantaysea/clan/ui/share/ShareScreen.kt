@@ -22,7 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.outlined.ScreenShare
+import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -53,10 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fantaysea.clan.data.PairingCodeGenerator
-import com.fantaysea.clan.data.mock.MockServer
 import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.ui.components.CountdownRing
+<<<<<<< HEAD
 import com.fantaysea.clan.core.navigation.HomeDestination
 import com.fantaysea.clan.core.navigation.LocalNavigator
 
@@ -72,8 +73,18 @@ fun ShareScreenPreview(){
 @Composable
 fun ShareScreen() {
     val navigator = LocalNavigator.current
+=======
+
+private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
+@Composable
+fun ShareScreen(
+    repository: ClanRepository,
+    onNavigate: (id: String) -> Unit,
+    onBack: () -> Unit,
+) {
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
     val context = LocalContext.current
-    val vm: ShareViewModel = viewModel { ShareViewModel(MockServer.instance) }
+    val vm: ShareViewModel = viewModel { ShareViewModel(repository) }
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val captureManager = remember { ScreenCaptureManager(context.applicationContext) }
@@ -83,7 +94,11 @@ fun ShareScreen() {
     LaunchedEffect(state.controlledSessionPeer) {
         val peer = state.controlledSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
+<<<<<<< HEAD
         navigator.navigateTo(HomeDestination.ControlledSession(peer.id))
+=======
+        onNavigate(peer.id)
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
     }
 
     LaunchedEffect(Unit) {
@@ -99,7 +114,9 @@ fun ShareScreen() {
     }
 
     // 与系统授权保持同步(进程内已授权则直接进入)
-    LaunchedEffect(Unit) { vm.onPermissionResult(captureManager.isGranted) }
+    LaunchedEffect(state.pairingAvailable) {
+        if (state.pairingAvailable) vm.onPermissionResult(captureManager.isGranted)
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -125,7 +142,10 @@ fun ShareScreen() {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                StatusChip(granted = state.permissionState == SharePermissionState.Granted)
+                StatusChip(
+                    granted = state.permissionState == SharePermissionState.Granted,
+                    available = state.pairingAvailable,
+                )
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -136,7 +156,9 @@ fun ShareScreen() {
                 .padding(padding),
             contentAlignment = Alignment.Center,
         ) {
-            when (state.permissionState) {
+            if (!state.pairingAvailable) {
+                ShareUnavailable()
+            } else when (state.permissionState) {
                 //具备权限显示匹配界面
                 SharePermissionState.Granted -> ShareContent(state = state)
                 //没有权限（权限被拒绝、或没有）
@@ -171,7 +193,7 @@ fun ShareScreen() {
 }
 
 @Composable
-private fun StatusChip(granted: Boolean) {
+private fun StatusChip(granted: Boolean, available: Boolean) {
     val bg = if (granted) ColorGreen else MaterialTheme.colorScheme.surfaceVariant
     Row(
         modifier = Modifier
@@ -189,9 +211,33 @@ private fun StatusChip(granted: Boolean) {
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = if (granted) "投屏就绪" else "未授权",
+            text = if (!available) "暂不可用" else if (granted) "投屏就绪" else "未授权",
             style = MaterialTheme.typography.labelMedium,
             color = if (granted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ShareUnavailable() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("服务端暂未支持", style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "配对与实时会话接口尚未开放，无需授予投屏权限",
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -220,7 +266,7 @@ private fun PermissionGate(denied: Boolean, onRequest: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Outlined.ScreenShare,
+                imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(44.dp),
@@ -296,7 +342,7 @@ private fun ShareContent(state: ShareUiState) {
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "${state.platform.ifEmpty { "Android" }} · ${state.model} · 标识 ${state.deviceTokenShort}",
+                        text = "${state.platform.ifEmpty { "ANDROID" }} · ${state.model} · 标识 ${state.deviceIdShort}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

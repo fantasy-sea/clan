@@ -6,7 +6,7 @@ package com.fantaysea.clan.data.model
  */
 data class DeviceBinding(
     val id: Long,
-    val deviceA: Long,
-    val deviceB: Long,
+    val deviceA: String,
+    val deviceB: String,
     val createdAt: Long,
 )

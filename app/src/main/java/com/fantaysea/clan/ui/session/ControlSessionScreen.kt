@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -51,8 +51,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+<<<<<<< HEAD
 import com.fantaysea.clan.core.navigation.LocalNavigator
 import com.fantaysea.clan.data.mock.MockServer
+=======
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.RemoteEvent
@@ -65,9 +68,17 @@ import kotlinx.coroutines.launch
  *   点击/滑动/按键通过数据通道发送给被控端执行。
  */
 @Composable
+<<<<<<< HEAD
 fun ControlSessionScreen(peer: Device) {
     val navigator = LocalNavigator.current
     val repository: ClanRepository = MockServer.instance
+=======
+fun ControlSessionScreen(
+    repository: ClanRepository,
+    peer: Device,
+    onBack: () -> Unit,
+) {
+>>>>>>> ed8cc7a2bcc6e1a65cef8d6559532e18a32a3172
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showEndConfirm by remember { mutableStateOf(false) }
@@ -149,7 +160,7 @@ fun ControlSessionScreen(peer: Device) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                ControlPadButton(Icons.Filled.KeyboardArrowLeft, "返回") {
+                ControlPadButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "返回") {
                     scope.launch { snackbarHostState.showSnackbar("已发送「返回」指令(模拟)") }
                 }
                 ControlPadButton(Icons.Filled.Home, "主页") {

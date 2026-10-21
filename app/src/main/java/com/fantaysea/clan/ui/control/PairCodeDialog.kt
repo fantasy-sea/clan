@@ -46,7 +46,7 @@ import com.fantaysea.clan.ui.components.shake
  * 通过后进入「配对等待中」; 对方确认后显示成功并自动关闭。
  */
 @Composable
-fun PairCodeDialog(
+internal fun PairCodeDialog(
     state: ControlHomeUiState,
     onDismiss: () -> Unit,
     onCodeChanged: (String) -> Unit,
@@ -82,9 +82,7 @@ fun PairCodeDialog(
                         onComplete = onComplete,
                     )
                 }
-
                 Spacer(modifier = Modifier.height(12.dp))
-
                 // 底部按钮
                 Row(
                     modifier = Modifier.fillMaxWidth(),
