@@ -1,10 +1,10 @@
 package com.fantaysea.clan.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ScreenShare
-import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,28 +38,52 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.core.navigation.HomeDestination
-import com.fantaysea.clan.core.navigation.LocalNavigator
+import com.fantaysea.clan.data.model.HomeMenuCardInfo
 
 /**
- * 首页菜单: 品牌区 + 两个入口大卡片(远程控制 / 共享屏幕)。
+ * 产品入口页: 品牌区 + 两个入口大卡片(远程控制 / 共享屏幕)。
  * 暖色渐变背景 + 装饰光斑 + 交错入场 + 按压缩放。
  */
+@Preview(name = "开屏", showBackground = true)
 @Composable
 fun HomeMenuScreen(
     isPlayAnimation: Boolean = true
 ) {
     val navigator = LocalNavigator.current
+    val colorScheme = MaterialTheme.colorScheme
     var entered by remember(isPlayAnimation) { mutableStateOf(!isPlayAnimation) }
     LaunchedEffect(Unit) {
         if (isPlayAnimation) entered = true
     }
-
+    // 描述对象(以及捕获 navigator 的回调)身份稳定, MenuCard 才能按 equals 命中跳过重组,
+    // 否则每次重组都新建两个 HomeMenuCardInfo, 两张卡片会被整棵重组。
+    val moduleList = remember(navigator, colorScheme) {
+        listOf(
+            HomeMenuCardInfo(
+                "1",
+                "远程控制",
+                "操作已配对的家人设备",
+                Icons.AutoMirrored.Outlined.ScreenShare,
+                120,
+                colorScheme.primaryContainer,
+                colorScheme.primary.copy(alpha = 0.75f),
+            ) { navigator.navigateTo(HomeDestination.ControlHome) },
+            HomeMenuCardInfo(
+                "2",
+                "共享屏幕",
+                "让家人协助操作",
+                Icons.AutoMirrored.Outlined.ScreenShare,
+                240,
+                colorScheme.tertiaryContainer,
+                colorScheme.tertiary.copy(alpha = 0.75f),
+            ) { navigator.navigateTo(HomeDestination.Share) },
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -97,80 +120,60 @@ fun HomeMenuScreen(
         ) {
             Spacer(modifier = Modifier.height(56.dp))
 
-            // 品牌区
+            // 产品名展示
+            //AnimatedVisibility 是个带动画的显隐容器
             AnimatedVisibility(
                 visible = entered,
-                enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 8 },
+                enter = fadeIn(tween(400)) +
+                        slideInVertically(tween(400)) { it / 8 },
             ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            MaterialTheme.colorScheme.primary,
-                                            MaterialTheme.colorScheme.tertiary,
-                                        ),
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.tertiary,
                                     ),
                                 ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(28.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.size(14.dp))
-                        Column {
-                            Text(
-                                text = "家助",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "家人的手机，随时相助",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(28.dp),
+                        )
                     }
+                    Spacer(modifier = Modifier.size(14.dp))
+                    Column {
+                        Text(
+                            text = "家助",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "家人的手机，随时相助",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
-            Spacer(modifier = Modifier.height(40.dp))
-            // 入口卡片(交错入场)
-            MenuCard(
-                visible = entered,
-                delay = 120,
-                icon = Icons.Outlined.PhoneAndroid,
-                title = "远程控制",
-                description = "操作已配对的家人设备",
-                gradient = listOf(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
-                ),
-
-                onClick = { navigator.navigateTo(HomeDestination.ControlHome) },
-
-            )
             Spacer(modifier = Modifier.height(20.dp))
-            MenuCard(
-                visible = entered,
-                delay = 240,
-                icon = Icons.AutoMirrored.Outlined.ScreenShare,
-                title = "共享屏幕",
-                description = "让家人远程协助本机",
-                gradient = listOf(
-                    MaterialTheme.colorScheme.tertiaryContainer,
-                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.75f),
-                ),
-                onClick = { navigator.navigateTo(HomeDestination.Share) },
-            )
-
+            // 入口卡片(交错入场)
+            moduleList.forEach {
+                Spacer(modifier = Modifier.height(20.dp))
+                MenuCard(
+                    visible = entered,
+                    info = it,
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
-
             Text(
                 text = "安全加密 · 连接需双方确认",
                 style = MaterialTheme.typography.bodySmall,
@@ -182,16 +185,10 @@ fun HomeMenuScreen(
         }
     }
 }
-
 @Composable
 private fun MenuCard(
     visible: Boolean,
-    delay: Int,
-    icon: ImageVector,
-    title: String,
-    description: String,
-    gradient: List<Color>,
-    onClick: () -> Unit,
+    info: HomeMenuCardInfo
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -200,11 +197,19 @@ private fun MenuCard(
         animationSpec = tween(120),
         label = "cardScale",
     )
+    // EnterTransition / Brush 都不是 data class, 每次重组新建会让 AnimatedVisibility 的
+    // transitionSpec 与 background 的 Brush 引用反复变化, 这里按参数缓存起来
+    val enter = remember(info.delay) {
+        fadeIn(tween(400, delayMillis = info.delay)) +
+                slideInVertically(tween(400, delayMillis = info.delay)) { it / 8 }
+    }
+    val gradient = remember(info.gradientStart, info.gradientEnd) {
+        Brush.linearGradient(listOf(info.gradientStart, info.gradientEnd))
+    }
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(400, delayMillis = delay)) +
-            slideInVertically(tween(400, delayMillis = delay)) { it / 8 },
+        enter = enter,
     ) {
         Row(
             modifier = Modifier
@@ -212,11 +217,11 @@ private fun MenuCard(
                 .height(136.dp)
                 .scale(scale)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Brush.linearGradient(gradient))
+                .background(gradient)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    onClick = onClick,
+                    onClick = info.event,
                 )
                 .padding(horizontal = 22.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -229,7 +234,7 @@ private fun MenuCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = info.icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp),
@@ -238,13 +243,13 @@ private fun MenuCard(
             Spacer(modifier = Modifier.size(18.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title,
+                    text = info.title,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = description,
+                    text = info.desc,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

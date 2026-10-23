@@ -23,26 +23,12 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.core.di.LocalAppPreferences
+import com.fantaysea.clan.core.di.LocalClanRepository
 import com.fantaysea.clan.core.navigation.AppNavigation
 import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.DeviceRegistration
-
-
-//staticCompositionLocalOf 用于不常变化的、全局需要使用的变量（值发生变化时会追踪重组整个 Provider 的 content 范围）
-//顶层变量用于声明不会变化、全局需要使用的变量
-//compositionLocalOf 用于声明常变化、全局需要使用的变量（值发生变化时重组读取该值的相关位置）
-
-val LocalAppPreferences = staticCompositionLocalOf<AppPreferences> {
-    //这边声明的是默认值，当没有为staticCompositionLocalOf<AppPreferences> 提供实现时才会调用
-    error("未提供本地存储实现")
-}
-
-
-val LocalClanRepository =staticCompositionLocalOf<ClanRepository>{
-    error("无法使用")
-}
-val EMPTY_FUNCTION ={}
 
 private sealed interface IdentityState {
     data object Loading : IdentityState
@@ -52,47 +38,43 @@ private sealed interface IdentityState {
 
 @Composable
 fun App(appPreferences: AppPreferences, repository: ClanRepository) {
+    //连接服务端尝试次数
     var attempt by remember { mutableIntStateOf(0) }
     var identityState by remember { mutableStateOf<IdentityState>(IdentityState.Loading) }
 
     LaunchedEffect(attempt) {
         identityState = IdentityState.Loading
         identityState = try {
+            //尝试注册本设备
             repository.initializeSelf(
+                //传入设备注册信息
                 DeviceRegistration(
                     deviceName = Build.MODEL,
                     model = Build.MODEL,
                     androidVersion = Build.VERSION.RELEASE,
-                ),
+                )
             )
+            // TODO 注册后有返回设备信息没有用上
             IdentityState.Ready
         } catch (error: Exception) {
             IdentityState.Error(error.message ?: "无法连接服务端")
         }
     }
-
-
-    //传入的值会传递给其下的所有子Composable
-    CompositionLocalProvider(
-        //在其中提供共享变量，其下的所有子Composable都能够访问到声明的一个或多个共享变量
-        LocalAppPreferences provides appPreferences,
-        LocalClanRepository provides repository
-    ) {
-        //其中所有Composable都能够访问LocalAppPreferences
-
-        when (val state = identityState) {
-            IdentityState.Loading -> IdentityLoading()
-            IdentityState.Ready -> CompositionLocalProvider(LocalAppPreferences provides appPreferences) {
+    when (val state = identityState) {
+        IdentityState.Loading -> IdentityLoading()
+        IdentityState.Ready ->
+            //传入的值会传递给其下的所有子Composable
+            //其中所有Composable都能够访问LocalAppPreferences
+            CompositionLocalProvider(
+                //在其中提供共享变量，其下的所有子Composable都能够访问到声明的一个或多个共享变量
+                LocalAppPreferences provides appPreferences,
+                LocalClanRepository provides repository
+            ) {
                 AppNavigation()
             }
-            is IdentityState.Error -> IdentityError(state.message, onRetry = { attempt++ })
-        }
+
+        is IdentityState.Error -> IdentityError(state.message, onRetry = { attempt++ })
     }
-
-
-
-
-
 
 }
 
@@ -112,7 +94,9 @@ private fun IdentityLoading() {
 @Composable
 private fun IdentityError(message: String, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

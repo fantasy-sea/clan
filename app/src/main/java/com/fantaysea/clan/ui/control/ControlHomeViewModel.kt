@@ -60,7 +60,6 @@ sealed interface ControlNavEvent {
 class ControlHomeViewModel(
     private val repository: ClanRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(ControlHomeUiState())
     val uiState: StateFlow<ControlHomeUiState> = _uiState.asStateFlow()
 
@@ -70,32 +69,31 @@ class ControlHomeViewModel(
     private val handled = mutableSetOf<String>()
 
     init {
+        //判断当前后端是否支持设备绑定，支持则获取设备列表
         if (BackendCapability.DEVICE_BINDINGS in repository.capabilities) {
             viewModelScope.launch { refresh() }
         } else {
+            //当前后端若不支持设备绑定，更新为不可用状态
             _uiState.update { it.copy(pageState = DeviceListState.Unavailable) }
         }
         viewModelScope.launch { observeEvents() }
     }
 
     private suspend fun refresh() {
+        //当前后端若不支持设备绑定，更新为不可用状态
         if (BackendCapability.DEVICE_BINDINGS !in repository.capabilities) {
             _uiState.update { it.copy(pageState = DeviceListState.Unavailable) }
             return
         }
-        _uiState.update {
-            it.copy(pageState = DeviceListState.Loading)
-        }
+        _uiState.update { it.copy(pageState = DeviceListState.Loading) }
+        // runCatching 可以处理异常 若没有异常则可以进一步链式处理
         runCatching {
             repository.fetchDevices()
         }.onSuccess { devices ->
             _uiState.update {
                 it.copy(
-                    pageState = if (devices.isEmpty()) {
-                        DeviceListState.Empty
-                    } else {
-                        DeviceListState.Success(devices)
-                    }
+                    pageState = if (devices.isEmpty()) DeviceListState.Empty
+                    else DeviceListState.Success(devices)
                 )
             }
 
@@ -109,7 +107,6 @@ class ControlHomeViewModel(
             }
         }
     }
-
     fun retry() = viewModelScope.launch { refresh() }
 
     private suspend fun observeEvents() {

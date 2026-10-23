@@ -68,10 +68,4 @@ private fun NavController.isCurrentDestination(destination: AppDestination): Boo
 @Suppress("UNCHECKED_CAST")
 private fun AppDestination.routeClass(): KClass<Any> = this::class as KClass<Any>
 
-/**
- * 全局导航入口: 由 AppNavigation 通过 CompositionLocalProvider 提供。
- *
- * 用 staticCompositionLocalOf 是因为提供的 Navigator 实例由 remember 缓存, 身份稳定不变;
- * 若以后需要暴露"当前目的地"这类会变化的值, 应改用 compositionLocalOf。
- */
-val LocalNavigator = staticCompositionLocalOf<Navigator> { NoOpNavigator }
+

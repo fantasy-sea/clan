@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -47,16 +48,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.fantaysea.clan.LocalClanRepository
+import com.fantaysea.clan.core.di.LocalClanRepository
+import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.core.navigation.HomeDestination
-import com.fantaysea.clan.core.navigation.LocalNavigator
 import com.fantaysea.clan.data.PairingCodeGenerator
 import com.fantaysea.clan.data.model.Device
-import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.ui.components.CountdownRing
 
@@ -104,6 +103,8 @@ fun ShareScreen() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

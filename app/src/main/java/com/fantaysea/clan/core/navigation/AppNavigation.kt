@@ -15,7 +15,8 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.fantaysea.clan.LocalAppPreferences
+import com.fantaysea.clan.core.di.LocalAppPreferences
+import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.ui.onboarding.OnboardingScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -26,17 +27,16 @@ fun AppNavigation() {
     val navController = rememberNavController()
     //获取本地存储方案
     val appPreferences = LocalAppPreferences.current
-
     val coroutineScope = rememberCoroutineScope()
     // remember 保证实例身份稳定, 与 staticCompositionLocalOf 的前提匹配。
     val navigator: Navigator = remember(navController) {
         // 收敛 NavController: UI 层只通过 Navigator 访问领域目的地, 不接触 NavController 本体。
         navController.asNavigator()
     }
-    // 冷启动入口只解析一次: 读完本地标识后固定 startDestination, 之后的跳转全部交给显式导航。
-    // 这样写标识时不会改变 startDestination, 也就不会重建整张导航图(避免硬切与状态丢失)。
     //produceState 将异步或外部的数据源（开启一个协程函数体）转换为Compose可观察的State
     val startDestination by produceState<Any?>(initialValue = null) {
+        // 冷启动入口只解析一次: 读完本地标识后固定 startDestination, 之后的跳转全部交给显式导航。
+        // 这样写标识时不会改变 startDestination, 也就不会重建整张导航图(避免硬切与状态丢失)。
         value = if (appPreferences.onboardingCompleted.first())
             HomeGraph else OnboardingDestination
     }

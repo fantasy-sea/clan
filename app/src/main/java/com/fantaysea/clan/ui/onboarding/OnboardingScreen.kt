@@ -12,7 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.fantaysea.clan.EMPTY_FUNCTION
+import com.fantaysea.clan.core.di.EMPTY_FUNCTION
 import com.fantaysea.clan.ui.theme.ClanTheme
 import kotlinx.coroutines.launch
 

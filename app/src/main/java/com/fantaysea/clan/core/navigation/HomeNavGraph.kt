@@ -1,13 +1,5 @@
 package com.fantaysea.clan.core.navigation
 
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -17,85 +9,43 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.navigation
 import androidx.navigation.toRoute
-import com.fantaysea.clan.LocalClanRepository
-import com.fantaysea.clan.data.mock.MockServer
+import com.fantaysea.clan.core.di.LocalClanRepository
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.ui.control.ControlHomeScreen
 import com.fantaysea.clan.ui.home.HomeMenuScreen
-import com.fantaysea.clan.ui.session.ControlledSessionScreen
 import com.fantaysea.clan.ui.session.ControlSessionScreen
+import com.fantaysea.clan.ui.session.ControlledSessionScreen
 import com.fantaysea.clan.ui.share.ShareScreen
-
-/** home 域转场(滑动 + 淡入淡出, 与原先 AnimatedContent 观感一致) */
-private val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(320))
-}
-private val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutHorizontally(tween(320)) { -it / 4 } + fadeOut(tween(240))
-}
-private val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
-    {
-        slideInHorizontally(tween(320)) { -it / 4 } + fadeIn(tween(320))
-    }
-private val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutHorizontally(tween(320)) { it / 4 } + fadeOut(tween(240))
-}
 
 /**
  * home 域嵌套导航图: 首页 / 远程控制 / 共享屏幕 / 控制页 / 被控页。
  * 目的地与参数由 [HomeDestination] 的类型序列化生成, 子屏只依赖目的地类型。
  * 跳转与返回统一走 [LocalNavigator](由 AppNavigation 注入), 这里不再透传导航回调。
+ * 页面转场由图级统一继承([appNavGraph]), 各页面不再重复声明。
  * 返回逻辑由各子屏自行注册 BackHandler 处理(会话页返回前有确认);
  * 图起点(home)的系统返回由 NavHost 判定不拦截(compose 栈仅剩一项), 交由系统退出应用。
  */
 fun NavGraphBuilder.homeGraph() {
-    navigation<HomeGraph>(startDestination = HomeDestination.Home) {
-        composable<HomeDestination.Home>(
-            enterTransition = homeEnter,
-            exitTransition = homeExit,
-            popEnterTransition = homePopEnter,
-            popExitTransition = homePopExit,
-        ) {
+    appNavGraph<HomeGraph>(startDestination = HomeDestination.Home) {
+        composable<HomeDestination.Home> {
             HomeMenuScreen()
         }
-        composable<HomeDestination.ControlHome>(
-            enterTransition = homeEnter,
-            exitTransition = homeExit,
-            popEnterTransition = homePopEnter,
-            popExitTransition = homePopExit,
-        ) {
+        composable<HomeDestination.ControlHome> {
             ControlHomeScreen()
         }
-        composable<HomeDestination.Share>(
-            enterTransition = homeEnter,
-            exitTransition = homeExit,
-            popEnterTransition = homePopEnter,
-            popExitTransition = homePopExit,
-        ) {
+        composable<HomeDestination.Share> {
             ShareScreen()
         }
-        composable<HomeDestination.ControlSession>(
-            enterTransition = homeEnter,
-            exitTransition = homeExit,
-            popEnterTransition = homePopEnter,
-            popExitTransition = homePopExit,
-        ) { entry ->
+        composable<HomeDestination.ControlSession> { entry ->
             val deviceId = entry.toRoute<HomeDestination.ControlSession>().deviceId
             SessionDeviceGate(deviceId = deviceId) { peer ->
                 ControlSessionScreen(peer = peer)
             }
         }
-        composable<HomeDestination.ControlledSession>(
-            enterTransition = homeEnter,
-            exitTransition = homeExit,
-            popEnterTransition = homePopEnter,
-            popExitTransition = homePopExit,
-        ) { entry ->
+        composable<HomeDestination.ControlledSession> { entry ->
             val deviceId = entry.toRoute<HomeDestination.ControlledSession>().deviceId
             SessionDeviceGate(deviceId = deviceId) { peer ->
                 ControlledSessionScreen(peer = peer)

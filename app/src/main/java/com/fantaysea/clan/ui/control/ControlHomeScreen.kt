@@ -1,6 +1,5 @@
 package com.fantaysea.clan.ui.control
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -19,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -58,29 +58,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.fantaysea.clan.LocalClanRepository
-import com.fantaysea.clan.data.repository.ClanRepository
-import com.fantaysea.clan.data.repository.PairedDevice
+import com.fantaysea.clan.core.di.LocalClanRepository
+import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.core.navigation.HomeDestination
-import com.fantaysea.clan.core.navigation.LocalNavigator
-import com.fantaysea.clan.ui.theme.ClanTheme
-import kotlin.math.roundToInt
+import com.fantaysea.clan.data.repository.PairedDevice
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+/**
+ 远程设备列表页
+  */
 @Composable
 fun ControlHomeScreen() {
     val navigator = LocalNavigator.current
     val repository =LocalClanRepository.current
     val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(repository) }
-
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    BackHandler { navigator.back() }
-
+    //监听是否有被控设备接入
     LaunchedEffect(state.controlSessionPeer) {
         val peer = state.controlSessionPeer ?: return@LaunchedEffect
+        //清空被控设备信息
         vm.consumeSessionPeer()
+        //前往设备控制页
         navigator.navigateTo(HomeDestination.ControlSession(peer.id.toLong()))
     }
 
@@ -125,6 +125,8 @@ internal fun ControlHomeScreenContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

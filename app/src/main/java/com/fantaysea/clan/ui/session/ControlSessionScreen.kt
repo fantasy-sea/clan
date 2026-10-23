@@ -50,10 +50,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.fantaysea.clan.LocalClanRepository
-import com.fantaysea.clan.core.navigation.LocalNavigator
+import com.fantaysea.clan.core.di.LocalClanRepository
+import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.data.model.Device
-import com.fantaysea.clan.data.repository.ClanRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
