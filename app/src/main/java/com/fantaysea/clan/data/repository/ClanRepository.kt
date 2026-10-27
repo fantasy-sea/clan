@@ -20,7 +20,7 @@ enum class BackendCapability {
     /**设备标识 （注册 / 获取本机信息）*/
     DEVICE_IDENTITY,
 
-    /**设备绑定  （/ 解绑 / 查
+    /**设备绑定（/ 解绑 / 查
     找）*/
     DEVICE_BINDINGS,
 
@@ -38,7 +38,7 @@ enum class BackendCapability {
 
 interface ClanRepository {
     /**
-     * 当前后端所支持的功能
+     * 存放当前后端所支持的功能
      */
     val capabilities: Set<BackendCapability>
     val events: SharedFlow<RemoteEvent>
@@ -55,12 +55,22 @@ interface ClanRepository {
     suspend fun fetchDevices(): List<PairedDevice>
     suspend fun findDevice(deviceId: String): Device?
     suspend fun unbindDevice(deviceId: String)
+
+    /**
+     * 修改已配对设备的设备名称(服务端 PATCH /api/v1/bindings/{deviceId})。
+     * 成功后列表重新拉取即可看到新名称。
+     */
+    suspend fun updateDeviceName(deviceId: String, deviceName: String)
     suspend fun createPairingCode(): PairingCode
     suspend fun submitPairingCode(code: String): String
     suspend fun respondMatch(requestId: String, accept: Boolean)
+    suspend fun cancelPairingRequest(requestId: String)
     suspend fun sendControlRequest(deviceId: String): String
     suspend fun respondControl(requestId: String, accept: Boolean)
     suspend fun endSession(peerDeviceId: String)
+
+    /** 释放仓库持有的实时连接；默认无操作，未持有实时连接的实现无需处理。 */
+    fun close() {}
 }
 
 open class ClanServiceException(message: String, cause: Throwable? = null) :

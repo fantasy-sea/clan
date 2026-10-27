@@ -12,19 +12,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.fantaysea.clan.core.di.LocalAppPreferences
 import com.fantaysea.clan.core.di.LocalClanRepository
+import com.fantaysea.clan.core.di.LocalSelfDevice
 import com.fantaysea.clan.core.navigation.AppNavigation
 import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.data.repository.ClanRepository
@@ -46,6 +45,7 @@ fun App(appPreferences: AppPreferences, repository: ClanRepository) {
         identityState = IdentityState.Loading
         identityState = try {
             //尝试注册本设备
+            // TODO 注册后有返回设备信息没有用上
             repository.initializeSelf(
                 //传入设备注册信息
                 DeviceRegistration(
@@ -54,7 +54,6 @@ fun App(appPreferences: AppPreferences, repository: ClanRepository) {
                     androidVersion = Build.VERSION.RELEASE,
                 )
             )
-            // TODO 注册后有返回设备信息没有用上
             IdentityState.Ready
         } catch (error: Exception) {
             IdentityState.Error(error.message ?: "无法连接服务端")
@@ -62,16 +61,19 @@ fun App(appPreferences: AppPreferences, repository: ClanRepository) {
     }
     when (val state = identityState) {
         IdentityState.Loading -> IdentityLoading()
-        IdentityState.Ready ->
+        IdentityState.Ready -> {
+            val selfDevice by repository.self.collectAsState()
             //传入的值会传递给其下的所有子Composable
             //其中所有Composable都能够访问LocalAppPreferences
             CompositionLocalProvider(
                 //在其中提供共享变量，其下的所有子Composable都能够访问到声明的一个或多个共享变量
                 LocalAppPreferences provides appPreferences,
-                LocalClanRepository provides repository
+                LocalClanRepository provides repository,
+                LocalSelfDevice provides selfDevice,
             ) {
                 AppNavigation()
             }
+        }
 
         is IdentityState.Error -> IdentityError(state.message, onRetry = { attempt++ })
     }

@@ -6,7 +6,7 @@ plugins {
 
 val configuredClanApiBaseUrl = providers.gradleProperty("CLAN_API_BASE_URL")
     .map { if (it.endsWith('/')) it else "$it/" }
-val debugClanApiBaseUrl = configuredClanApiBaseUrl.orElse("http://10.0.2.2:8080/")
+val debugClanApiBaseUrl = configuredClanApiBaseUrl.orElse("http://192.168.110.3:8080/")
 val releaseClanApiBaseUrl = configuredClanApiBaseUrl.orElse("https://clan.invalid/")
 
 android {
@@ -62,10 +62,10 @@ dependencies {
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

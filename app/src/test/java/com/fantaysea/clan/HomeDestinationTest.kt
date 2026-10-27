@@ -3,6 +3,7 @@ package com.fantaysea.clan
 import com.fantaysea.clan.core.navigation.HomeDestination
 import com.fantaysea.clan.core.navigation.HomeGraph
 import com.fantaysea.clan.core.navigation.OnboardingDestination
+import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.serializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,6 +20,7 @@ class HomeDestinationTest {
         val descriptor = serializer<HomeDestination.ControlSession>().descriptor
         assertEquals(1, descriptor.elementsCount)
         assertEquals("deviceId", descriptor.getElementName(0))
+        assertEquals(PrimitiveKind.STRING, descriptor.getElementDescriptor(0).kind)
     }
 
     @Test

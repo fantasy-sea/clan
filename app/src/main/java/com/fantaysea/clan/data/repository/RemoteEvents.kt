@@ -11,11 +11,24 @@ data class PairedDevice(
 )
 
 /**
- * 远程信令事件(服务端推送 / 本地 Mock 广播)。
- * 真实实现中, 这些事件由 [com.fantaysea.clan.data.ws.WebSocketClient] 收到
- * [com.fantaysea.clan.data.ws.WsMessage] 后映射而来。
+ * 远程信令事件(服务端推送)。
+ * 真实实现中, 这些事件由 [com.fantaysea.clan.data.ws.OkHttpWebSocketClient] 收到
+ * [com.fantaysea.clan.data.ws.WsFrame] 后经 WsEventMapper 映射而来。
  */
 sealed interface RemoteEvent {
+
+    /** WebSocket 认证成功/重连成功: 客户端应刷新绑定列表做对账 */
+    data object RealtimeReady : RemoteEvent
+
+    /**
+     * 已配对设备的上下线推送(服务端 DEVICE_ONLINE / DEVICE_OFFLINE)。
+     * [lastSeenAt] 为服务端最后在线时间换算的 epoch millis, 解析失败时为 null。
+     */
+    data class DevicePresence(
+        val deviceId: String,
+        val online: Boolean,
+        val lastSeenAt: Long? = null,
+    ) : RemoteEvent
 
     /** 控制端提交了有效配对码 → 被控端弹出「配对确认」框 */
     data class MatchRequest(
@@ -24,11 +37,12 @@ sealed interface RemoteEvent {
         val requester: Device,
     ) : RemoteEvent
 
-    /** 配对结果回推给控制端: 成功时携带新配对进来的被控设备 */
+    /** 配对结果回推: 成功时若携带设备则直接展示, 否则等待 PairingSucceeded */
     data class MatchResult(
         val requestId: String,
         val accepted: Boolean,
         val pairedDevice: Device?,
+        val expired: Boolean = false,
     ) : RemoteEvent
 
     /** 配对成功后回推给被控端 */

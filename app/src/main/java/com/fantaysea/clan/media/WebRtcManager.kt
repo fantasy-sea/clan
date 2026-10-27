@@ -6,7 +6,7 @@ package com.fantaysea.clan.media
  * 职责: 在控制端与被控端之间建立 PeerConnection, 把被控端屏幕视频流
  * (来自 MediaProjection 的 Surface/VirtualDisplay)作为视频轨发送给控制端。
  *
- * 落地建议: 引入 org.webrtc:google-webrtc, 结合信令(WsMessage 中的 SDP/ICE 交换)。
+ * 落地建议: 引入 org.webrtc:google-webrtc, 结合信令(WsFrame 中的 SDP/ICE 交换)。
  * 本接口只描述能力边界, 真实依赖就绪后再补实现。
  */
 interface WebRtcManager {

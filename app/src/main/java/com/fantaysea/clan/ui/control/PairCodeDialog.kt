@@ -53,10 +53,14 @@ internal fun PairCodeDialog(
     onComplete: (String) -> Unit,
 ) {
     val isError = state.pairPhase == PairPhase.Error
-
+    val validating = state.pairPhase == PairPhase.Validating
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = !validating,
+            dismissOnClickOutside = !validating,
+        ),
     ) {
         Surface(
             modifier = Modifier

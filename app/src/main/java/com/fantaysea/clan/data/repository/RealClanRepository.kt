@@ -5,17 +5,32 @@ import com.fantaysea.clan.data.DeviceCredentials
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.model.PairingCode
 import com.fantaysea.clan.data.remote.ApiEnvelope
+import com.fantaysea.clan.data.remote.BindingResponse
 import com.fantaysea.clan.data.remote.ClanApi
 import com.fantaysea.clan.data.remote.DeviceResponse
+import com.fantaysea.clan.data.remote.PairingVerifyRequest
 import com.fantaysea.clan.data.remote.RegisterDeviceRequest
+import com.fantaysea.clan.data.remote.RenameDeviceRequest
+import com.fantaysea.clan.data.ws.OkHttpWebSocketClient
+import com.fantaysea.clan.data.ws.WsEventMapper
+import com.fantaysea.clan.data.ws.WsFailure
+import com.fantaysea.clan.data.ws.WsProtocol
+import com.fantaysea.clan.data.ws.WsState
+import com.fantaysea.clan.data.ws.WebSocketClient
 import java.time.Instant
 import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
@@ -25,18 +40,35 @@ import okhttp3.MediaType.Companion.toMediaType
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlin.time.Duration.Companion.milliseconds
 
 class RealClanRepository(
     private val api: ClanApi,
     private val credentialStore: DeviceCredentialStore,
+    private val realtime: WebSocketClient = OkHttpWebSocketClient(),
+    private val realtimeUrl: String? = null,
     private val json: Json = defaultJson,
 ) : ClanRepository {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     //开发阶段 静态声明用于告知前端目前服务端支持了哪些功能
-    override val capabilities: Set<BackendCapability> = setOf(BackendCapability.DEVICE_IDENTITY)
+    override val capabilities: Set<BackendCapability> = setOf(
+        BackendCapability.DEVICE_IDENTITY,
+        BackendCapability.DEVICE_BINDINGS,
+        BackendCapability.PAIRING,
+        BackendCapability.REALTIME_SIGNALING,
+    )
     private val mutableSelf = MutableStateFlow<Device?>(null)
     override val self: StateFlow<Device?> = mutableSelf.asStateFlow()
-    private val mutableEvents = MutableSharedFlow<RemoteEvent>()
+    private val mutableEvents = MutableSharedFlow<RemoteEvent>(extraBufferCapacity = 32)
     override val events: SharedFlow<RemoteEvent> = mutableEvents.asSharedFlow()
+
+    init {
+        scope.launch {
+            realtime.incoming.collect { frame ->
+                WsEventMapper.map(frame)?.let { mutableEvents.emit(it) }
+            }
+        }
+    }
 
     /**
      * 协程互斥锁，用于控制多个协程对共享资源的并发访问，避免多个协程同时修改同一份数据而导致问题
@@ -47,7 +79,11 @@ class RealClanRepository(
         //withLock：获取锁执行创建协程执行代码随后自动释放锁
         initializationMutex.withLock {
             //如果已经有设备信息，直接返回
-            mutableSelf.value?.let { return@withLock it }
+            val cached = mutableSelf.value
+            if (cached != null) {
+                startRealtime()
+                return@withLock cached
+            }
             //从本机存储中读取是否有设备凭证，没有则进行注册流程
             var credentials = credentialStore.load() ?: register(registration)
             val device = try {
@@ -57,19 +93,25 @@ class RealClanRepository(
                 //设备凭据获取设备信息遇到问题，判断是否为无效令牌。是的话重新注册，不是的话问题不简单
                 if (error.businessCode != INVALID_DEVICE_TOKEN) throw error
                 credentialStore.clear()
+                realtime.stop()
                 credentials = register(registration)
                 try {
                     //重新注册了设备凭据后重新获取设备信息
                     loadCurrentDevice(credentials.deviceToken)
                 } catch (retryError: ClanApiException) {
                     //重试还是发生错误，还是令牌无效的话不再重新注册。清空本地的设备凭据
-                    if (retryError.businessCode == INVALID_DEVICE_TOKEN) credentialStore.clear()
+                    if (retryError.businessCode == INVALID_DEVICE_TOKEN) {
+                        credentialStore.clear()
+                        realtime.stop()
+                    }
                     //重试发生了非令牌无效的错误无法解决了
                     throw retryError
                 }
             }
             //将获取到的设备信息保存到内存并返回设备信息
             mutableSelf.value = device
+            //尽早建立实时连接：配对/控制事件依赖它，等用户点进「共享屏幕」再连会明显变慢。
+            startRealtime()
             device
         }
 
@@ -102,23 +144,191 @@ class RealClanRepository(
     }.requireData().toDeviceDomain()
 
     override suspend fun fetchDevices(): List<PairedDevice> =
-        unsupported(BackendCapability.DEVICE_BINDINGS)
+        safeApiCall { api.listBindings(authorization()) }
+            .requireData()
+            .map { it.toPairedDevice() }
 
     override suspend fun findDevice(deviceId: String): Device? {
-        val current = self.value
-        if (current?.id == deviceId) return current
-        return unsupported(BackendCapability.DEVICE_BINDINGS)
+        self.value?.takeIf { it.id == deviceId }?.let { return it }
+        return try {
+            safeApiCall { api.getBinding(authorization(), deviceId) }
+                .requireData()
+                .toDevice()
+        } catch (error: ClanApiException) {
+            // 未绑定 / 已解绑对 App 而言就是“设备不存在”，不向 UI 抛 404。
+            if (error.businessCode == BINDING_NOT_FOUND || error.businessCode == DEVICE_NOT_FOUND) null
+            else throw error
+        }
     }
 
-    override suspend fun unbindDevice(deviceId: String): Unit =
-        unsupported(BackendCapability.DEVICE_BINDINGS)
+    override suspend fun unbindDevice(deviceId: String) {
+        try {
+            safeApiCall { api.deleteBinding(authorization(), deviceId) }.requireSuccess()
+        } catch (error: ClanApiException) {
+            // 重复解绑按幂等成功处理，重复调用不会报错。
+            if (error.businessCode != BINDING_NOT_FOUND) throw error
+        }
+    }
 
-    override suspend fun createPairingCode(): PairingCode = unsupported(BackendCapability.PAIRING)
-    override suspend fun submitPairingCode(code: String): String =
-        unsupported(BackendCapability.PAIRING)
+    override suspend fun updateDeviceName(deviceId: String, deviceName: String) {
+        val name = deviceName.trim()
+        if (name.isEmpty()) throw ClanServiceException("设备名称不能为空")
+        try {
+            safeApiCall {
+                api.renameBinding(authorization(), deviceId, RenameDeviceRequest(deviceName = name))
+            }.requireData()
+        } catch (error: ClanApiException) {
+            when {
+                error.businessCode == BINDING_NOT_FOUND || error.businessCode == DEVICE_NOT_FOUND ->
+                    throw ClanServiceException("设备不存在或已解绑", error)
 
-    override suspend fun respondMatch(requestId: String, accept: Boolean): Unit =
-        unsupported(BackendCapability.PAIRING)
+                // 服务端还没有该接口(或网关未放行 PATCH)时给出可读提示, 而不是裸 404。
+                error.httpStatus == 404 || error.httpStatus == 405 ->
+                    throw ClanServiceException("当前服务端暂不支持修改设备名称", error)
+
+                else -> throw error
+            }
+        }
+    }
+
+    private suspend fun deviceToken(): String =
+        credentialStore.load()?.deviceToken
+            ?: throw ClanApiException(null, null, "设备未注册")
+
+    private suspend fun authorization(): String = "Bearer ${deviceToken()}"
+
+    /**
+     * 后台预热实时连接：不等待结果，失败交给 [WebSocketClient] 自己退避重连。
+     * 取不到设备令牌时直接跳过，真正的认证失败会在 [ensureRealtime] 里暴露。
+     */
+    private suspend fun startRealtime() {
+        val url = realtimeUrl ?: return
+        val token = credentialStore.load()?.deviceToken ?: return
+        realtime.start(url, token)
+    }
+
+    /**
+     * 配对码校验要求双方都已在服务端在线，所以提交配对码前必须确认本端 AUTH 完成。
+     * 客户端在后台自动重连，这里只等结果，并把失败原因翻译成可行动的提示。
+     */
+    private suspend fun ensureRealtime() {
+        if (realtimeUrl == null) return
+        startRealtime()
+        var waited = 0L
+        while (waited < REALTIME_CONNECT_TIMEOUT_MS) {
+            if (realtime.state.value == WsState.Connected) return
+            val failure = realtime.failure.value
+            // 令牌失效/被限流：重试不会成功，直接告诉用户怎么恢复。
+            if (failure is WsFailure.AuthRejected) {
+                throw ClanApiException(null, null, "${failure.message}，请退出应用后重新打开")
+            }
+            delay(REALTIME_POLL_INTERVAL_MS.milliseconds)
+            waited += REALTIME_POLL_INTERVAL_MS
+        }
+        val reason = realtime.failure.value?.message
+        throw ClanApiException(null, null, reason?.let { "$it，请重试" } ?: "实时连接未就绪，请重试")
+    }
+
+    override suspend fun createPairingCode(): PairingCode {
+        // 配对码是纯 REST 接口（服务端只落库），不要求本端 WebSocket 已就绪：
+        // 这里只顺带预热连接，绝不因为实时连接慢/连不上而让「共享屏幕」显示不出配对码。
+        startRealtime()
+        val response = try {
+            safeApiCall { api.createPairingCode(authorization()) }.requireData()
+        } catch (error: ClanApiException) {
+            throw deviceError(error)
+        }
+        if (response.pairingCode.isBlank()) throw ClanApiException(null, null, "配对码响应无效")
+        val expiresAt = response.expiresAt.toEpochMillisOrNull()
+            ?: throw ClanApiException(null, null, "配对码过期时间无效")
+        return PairingCode(
+            id = 0,
+            code = response.pairingCode,
+            deviceId = self.value?.id.orEmpty(),
+            expiresAt = expiresAt,
+            used = false,
+            createdAt = System.currentTimeMillis(),
+        )
+    }
+
+    override suspend fun submitPairingCode(code: String): String {
+        ensureRealtime()
+        val response = try {
+            safeApiCall { api.verifyPairingCode(authorization(), PairingVerifyRequest(code)) }.requireData()
+        } catch (error: ClanApiException) {
+            throw pairingCodeError(error)
+        }
+        if (response.requestId.isBlank()) throw ClanApiException(null, null, "配对请求响应无效")
+        return response.requestId
+    }
+
+    override suspend fun respondMatch(requestId: String, accept: Boolean) {
+        try {
+            val response = if (accept) {
+                safeApiCall { api.acceptPairingRequest(authorization(), requestId) }
+            } else {
+                safeApiCall { api.rejectPairingRequest(authorization(), requestId) }
+            }
+            response.requireSuccess()
+        } catch (error: ClanApiException) {
+            throw pairingRequestError(error)
+        }
+    }
+
+    override suspend fun cancelPairingRequest(requestId: String) {
+        try {
+            safeApiCall { api.cancelPairingRequest(authorization(), requestId) }.requireSuccess()
+        } catch (error: ClanApiException) {
+            // 已结束/已过期/已处理都视为取消成功，本地弹窗正常关闭。
+            val code = error.businessCode
+            if (code == null || code !in setOf(
+                    PAIRING_REQUEST_NOT_FOUND,
+                    PAIRING_REQUEST_EXPIRED,
+                    PAIRING_REQUEST_ALREADY_HANDLED,
+                )
+            ) {
+                throw error
+            }
+        }
+    }
+
+    /**
+     * 设备身份类错误对用户没有可操作性，翻译成「重新打开应用」这类指引；
+     * 应用重启后 [initializeSelf] 会用新令牌重新注册。
+     */
+    private fun deviceError(error: ClanApiException): Exception = when (error.businessCode) {
+        INVALID_DEVICE_TOKEN ->
+            ClanApiException(error.businessCode, error.httpStatus, "设备凭据已失效，请退出应用后重新打开", error)
+        DEVICE_NOT_FOUND ->
+            ClanApiException(error.businessCode, error.httpStatus, "设备已被服务端删除，请退出应用后重新打开", error)
+        else -> error
+    }
+
+    private fun pairingCodeError(error: ClanApiException): Exception = when (error.businessCode) {
+        PAIRING_CODE_INVALID, PAIRING_CODE_USED ->
+            InvalidPairingCodeException("配对码错误，请重新输入")
+        PAIRING_CODE_EXPIRED ->
+            ExpiredPairingCodeException("配对码已过期，请重新获取")
+        SELF_PAIRING ->
+            InvalidPairingCodeException("不能与本机配对")
+        PAIRING_REQUEST_ALREADY_EXISTS ->
+            ClanServiceException("已有待处理的配对请求，请稍后重试")
+        BINDING_ALREADY_EXISTS ->
+            ClanServiceException("该设备已经绑定")
+        DEVICE_OFFLINE ->
+            DeviceOfflineException("对方或本机实时连接不在线，请稍后重试")
+        RATE_LIMITED ->
+            ClanServiceException("操作过于频繁，请稍后再试")
+        else -> error
+    }
+
+    private fun pairingRequestError(error: ClanApiException): Exception = when (error.businessCode) {
+        PAIRING_REQUEST_NOT_FOUND -> ClanServiceException("配对请求不存在")
+        PAIRING_REQUEST_EXPIRED -> ExpiredPairingCodeException("配对请求已过期")
+        PAIRING_REQUEST_ALREADY_HANDLED -> ClanServiceException("配对请求已处理")
+        PAIRING_REQUEST_NOT_ALLOWED -> ClanServiceException("无权处理该配对请求")
+        else -> error
+    }
 
     override suspend fun sendControlRequest(deviceId: String): String =
         unsupported(BackendCapability.CONTROL_SESSIONS)
@@ -128,6 +338,11 @@ class RealClanRepository(
 
     override suspend fun endSession(peerDeviceId: String): Unit =
         unsupported(BackendCapability.CONTROL_SESSIONS)
+
+    override fun close() {
+        realtime.stop()
+        scope.cancel()
+    }
 
     private fun <T> unsupported(capability: BackendCapability): T =
         throw BackendCapabilityUnavailableException(capability)
@@ -142,13 +357,25 @@ class RealClanRepository(
         createdAt = createdAt.toEpochMillisOrNull(),
     )
 
+    private fun BindingResponse.toDevice() = Device(
+        id = deviceId,
+        deviceName = deviceName,
+        platform = platform,
+        model = model.orEmpty(),
+        androidVersion = androidVersion,
+        lastOnlineAt = lastSeenAt.toEpochMillisOrNull(),
+        createdAt = createdAt.toEpochMillisOrNull(),
+    )
+
+    private fun BindingResponse.toPairedDevice() = PairedDevice(toDevice(), online)
+
     private fun String?.toEpochMillisOrNull(): Long? =
         this?.let { value -> runCatching { Instant.parse(value).toEpochMilli() }.getOrNull() }
 
     /**
-     * 处理响应的数据
+     * 校验 HTTP 状态与业务码，返回完整信封。
      */
-    private fun <T> Response<ApiEnvelope<T>>.requireData(): T {
+    private fun <T> Response<ApiEnvelope<T>>.requireEnvelope(): ApiEnvelope<T> {
         //响应失败
         if (!isSuccessful) {
             val parsed = errorBody()?.string()?.let { body ->
@@ -163,7 +390,7 @@ class RealClanRepository(
             throw ClanApiException(
                 parsed?.code,
                 code(),
-                parsed?.message ?: "服务请求失败 (${code()})"
+                failureMessage(code(), parsed?.code, parsed?.message)
             )
         }
         //处理响应成功
@@ -173,10 +400,31 @@ class RealClanRepository(
         if (envelope.code != SUCCESS) throw ClanApiException(
             envelope.code,
             code(),
-            envelope.message
+            failureMessage(code(), envelope.code, envelope.message)
         )
-        //3.判断是否拿到了响应体中的数据
+        return envelope
+    }
+
+    /**
+     * 服务端 5xx 只返回英文的 "Internal server error"，对用户没有任何指引，
+     * 统一翻译成中文提示；其余情况保留服务端文案，便于定位业务错误。
+     */
+    private fun failureMessage(httpStatus: Int, businessCode: Int?, serverMessage: String?): String = when {
+        httpStatus >= 500 || businessCode == INTERNAL_ERROR -> "服务端内部异常（500），请稍后重试"
+        !serverMessage.isNullOrBlank() -> serverMessage
+        else -> "服务请求失败 ($httpStatus)"
+    }
+
+    /**
+     * 处理响应的数据；DELETE 等无 data 的接口使用 [requireSuccess]。
+     */
+    private fun <T> Response<ApiEnvelope<T>>.requireData(): T {
+        val envelope = requireEnvelope()
         return envelope.data ?: throw ClanApiException(envelope.code, code(), "服务响应缺少数据")
+    }
+
+    private fun <T> Response<ApiEnvelope<T>>.requireSuccess() {
+        requireEnvelope()
     }
 
     /**
@@ -197,14 +445,42 @@ class RealClanRepository(
 
     companion object {
         private const val SUCCESS = 0
+        private const val INTERNAL_ERROR = 50001
         private const val INVALID_DEVICE_TOKEN = 40002
+        private const val DEVICE_NOT_FOUND = 40003
+        private const val DEVICE_OFFLINE = 40004
+        private const val RATE_LIMITED = 40005
+        private const val PAIRING_CODE_INVALID = 40101
+        private const val PAIRING_CODE_EXPIRED = 40102
+        private const val PAIRING_CODE_USED = 40103
+        private const val SELF_PAIRING = 40104
+        private const val PAIRING_REQUEST_NOT_FOUND = 40105
+        private const val PAIRING_REQUEST_EXPIRED = 40106
+        private const val PAIRING_REQUEST_ALREADY_HANDLED = 40107
+        private const val PAIRING_REQUEST_NOT_ALLOWED = 40108
+        private const val PAIRING_REQUEST_ALREADY_EXISTS = 40109
+        private const val BINDING_NOT_FOUND = 40201
+        private const val BINDING_ALREADY_EXISTS = 40202
+
+        /** 提交配对码前等待实时连接认证完成的上限。 */
+        private const val REALTIME_CONNECT_TIMEOUT_MS = 15_000L
+        private const val REALTIME_POLL_INTERVAL_MS = 100L
         val defaultJson: Json = Json { ignoreUnknownKeys = true; explicitNulls = false }
-        fun create(baseUrl: String, credentialStore: DeviceCredentialStore): RealClanRepository {
+        fun create(
+            baseUrl: String,
+            credentialStore: DeviceCredentialStore,
+            realtime: WebSocketClient = OkHttpWebSocketClient(),
+        ): RealClanRepository {
             val retrofit = Retrofit.Builder()
                 .baseUrl(baseUrl)
                 .addConverterFactory(defaultJson.asConverterFactory("application/json".toMediaType()))
                 .build()
-            return RealClanRepository(retrofit.create(ClanApi::class.java), credentialStore)
+            return RealClanRepository(
+                api = retrofit.create(ClanApi::class.java),
+                credentialStore = credentialStore,
+                realtime = realtime,
+                realtimeUrl = WsProtocol.toWebSocketUrl(baseUrl),
+            )
         }
     }
 }

@@ -5,9 +5,20 @@ import com.fantaysea.clan.data.DeviceCredentials
 import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.BackendCapabilityUnavailableException
 import com.fantaysea.clan.data.repository.ClanApiException
+import com.fantaysea.clan.data.repository.DeviceOfflineException
 import com.fantaysea.clan.data.repository.DeviceRegistration
+import com.fantaysea.clan.data.repository.ExpiredPairingCodeException
+import com.fantaysea.clan.data.repository.InvalidPairingCodeException
 import com.fantaysea.clan.data.repository.RealClanRepository
+import com.fantaysea.clan.data.ws.WsFailure
+import com.fantaysea.clan.data.ws.WsFrame
+import com.fantaysea.clan.data.ws.WsState
+import com.fantaysea.clan.data.ws.WebSocketClient
 import java.time.Instant
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -23,6 +34,7 @@ import org.junit.Test
 class RealClanRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var credentials: FakeCredentialStore
+    private lateinit var realtime: FakeWebSocketClient
     private val registration = DeviceRegistration("Pixel 8", "Pixel 8", "16")
 
     @Before
@@ -30,6 +42,7 @@ class RealClanRepositoryTest {
         server = MockWebServer()
         server.start()
         credentials = FakeCredentialStore()
+        realtime = FakeWebSocketClient()
     }
 
     @After
@@ -150,16 +163,195 @@ class RealClanRepositoryTest {
     }
 
     @Test
-    fun `missing capabilities fail locally without HTTP requests`() {
+    fun `binding pairing and realtime capabilities are enabled while control remains unsupported`() {
         val repository = repository()
 
+        assertTrue(BackendCapability.DEVICE_BINDINGS in repository.capabilities)
+        assertTrue(BackendCapability.PAIRING in repository.capabilities)
+        assertTrue(BackendCapability.REALTIME_SIGNALING in repository.capabilities)
+
         val error = assertThrows(BackendCapabilityUnavailableException::class.java) {
-            runBlocking { repository.fetchDevices() }
+            runBlocking { repository.sendControlRequest("dev_peer") }
         }
 
-        assertEquals(BackendCapability.DEVICE_BINDINGS, error.capability)
+        assertEquals(BackendCapability.CONTROL_SESSIONS, error.capability)
         assertEquals("服务端暂未支持", error.message)
         assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `fetchDevices maps binding fields and sends the device token`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(listEnvelope(bindingJson("dev_peer"), bindingJson("dev_offline", online = false))))
+
+        val devices = repository.fetchDevices()
+
+        assertEquals(2, devices.size)
+        assertEquals("dev_peer", devices[0].device.id)
+        assertEquals("妈妈的手机", devices[0].device.deviceName)
+        assertEquals("Pixel 8", devices[0].device.model)
+        assertTrue(devices[0].online)
+        assertEquals(Instant.parse("2026-09-13T02:03:04Z").toEpochMilli(), devices[0].device.lastOnlineAt)
+        assertEquals(Instant.parse("2026-09-01T00:00:00Z").toEpochMilli(), devices[0].device.createdAt)
+        assertFalse(devices[1].online)
+
+        val request = server.takeRequest()
+        assertEquals("/api/v1/bindings", request.path)
+        assertEquals("Bearer token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `findDevice returns a bound peer from the single binding endpoint`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(dataEnvelope(bindingJson("dev_peer"))))
+
+        val device = repository.findDevice("dev_peer")
+
+        assertEquals("dev_peer", device?.id)
+        assertEquals("妈妈的手机", device?.deviceName)
+        val request = server.takeRequest()
+        assertEquals("/api/v1/bindings/dev_peer", request.path)
+        assertEquals("Bearer token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `findDevice returns self without an HTTP request`() = runBlocking {
+        val repository = initializedRepository()
+        val requestCount = server.requestCount
+
+        val device = repository.findDevice("dev_self")
+
+        assertEquals("dev_self", device?.id)
+        assertEquals(requestCount, server.requestCount)
+    }
+
+    @Test
+    fun `findDevice returns null when the peer is not bound`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse("""{"code":40201,"message":"Binding not found","data":null}""", 404))
+
+        assertNull(repository.findDevice("dev_missing"))
+        assertEquals("/api/v1/bindings/dev_missing", server.takeRequest().path)
+    }
+
+    @Test
+    fun `unbindDevice accepts a null data payload`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse("""{"code":0,"message":"success","data":null}"""))
+
+        repository.unbindDevice("dev_peer")
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/api/v1/bindings/dev_peer", request.path)
+        assertEquals("Bearer token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `unbindDevice treats an already removed binding as success`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse("""{"code":40201,"message":"Binding not found","data":null}""", 404))
+
+        repository.unbindDevice("dev_peer")
+
+        assertEquals("/api/v1/bindings/dev_peer", server.takeRequest().path)
+    }
+
+    @Test
+    fun `binding server errors are propagated`() {
+        val repository = runBlocking { initializedRepository() }
+        server.enqueue(jsonResponse("""{"code":50001,"message":"Internal error","data":null}""", 500))
+
+        val error = assertThrows(ClanApiException::class.java) {
+            runBlocking { repository.findDevice("dev_peer") }
+        }
+
+        assertEquals(50001, error.businessCode)
+    }
+
+    @Test
+    fun `createPairingCode starts realtime and maps server expiry`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(dataEnvelope("""{"pairingCode":"123456","expiresAt":"2026-09-13T02:04:04Z"}""")))
+
+        val code = repository.createPairingCode()
+
+        assertEquals("123456", code.code)
+        assertEquals("dev_self", code.deviceId)
+        assertEquals(Instant.parse("2026-09-13T02:04:04Z").toEpochMilli(), code.expiresAt)
+        assertEquals("ws://localhost:${server.port}/ws", realtime.startedUrl)
+        assertEquals("token", realtime.startedToken)
+        assertTrue(BackendCapability.PAIRING in repository.capabilities)
+        assertTrue(BackendCapability.REALTIME_SIGNALING in repository.capabilities)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v1/pairing/codes", request.path)
+        assertEquals("Bearer token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `submitPairingCode posts the code and returns request id`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(dataEnvelope("""{"requestId":"pairreq_1","expiresAt":"2026-09-13T02:04:04Z"}""")))
+
+        val requestId = repository.submitPairingCode("123456")
+
+        assertEquals("pairreq_1", requestId)
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v1/pairing/verify", request.path)
+        assertTrue(request.body.readUtf8().contains("\"pairingCode\":\"123456\""))
+    }
+
+    @Test
+    fun `pairing code errors map to typed exceptions`() {
+        val repository = runBlocking { initializedRepository() }
+        server.enqueue(jsonResponse("""{"code":40101,"message":"Pairing code invalid","data":null}""", 400))
+
+        val invalid = assertThrows(InvalidPairingCodeException::class.java) {
+            runBlocking { repository.submitPairingCode("123456") }
+        }
+        assertEquals("配对码错误，请重新输入", invalid.message)
+
+        server.enqueue(jsonResponse("""{"code":40102,"message":"Pairing code expired","data":null}""", 410))
+        val expired = assertThrows(ExpiredPairingCodeException::class.java) {
+            runBlocking { repository.submitPairingCode("123456") }
+        }
+        assertEquals("配对码已过期，请重新获取", expired.message)
+
+        server.enqueue(jsonResponse("""{"code":40004,"message":"Device offline","data":null}""", 409))
+        val offline = assertThrows(DeviceOfflineException::class.java) {
+            runBlocking { repository.submitPairingCode("123456") }
+        }
+        assertTrue(offline.message!!.contains("不在线"))
+    }
+
+    @Test
+    fun `respondMatch uses accept and reject endpoints`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(dataEnvelope("""{"requestId":"pairreq_1","status":"ACCEPTED","expiresAt":"2026-09-13T02:04:04Z","handledAt":"2026-09-13T02:04:05Z"}""")))
+        server.enqueue(jsonResponse(dataEnvelope("""{"requestId":"pairreq_2","status":"REJECTED","expiresAt":"2026-09-13T02:04:04Z","handledAt":"2026-09-13T02:04:05Z"}""")))
+
+        repository.respondMatch("pairreq_1", accept = true)
+        repository.respondMatch("pairreq_2", accept = false)
+
+        val accept = server.takeRequest()
+        assertEquals("/api/v1/pairing/requests/pairreq_1/accept", accept.path)
+        val reject = server.takeRequest()
+        assertEquals("/api/v1/pairing/requests/pairreq_2/reject", reject.path)
+    }
+
+    @Test
+    fun `cancelPairingRequest posts cancel and tolerates already ended request`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(dataEnvelope("""{"requestId":"pairreq_1","status":"REJECTED","expiresAt":"2026-09-13T02:04:04Z","handledAt":"2026-09-13T02:04:05Z"}""")))
+        repository.cancelPairingRequest("pairreq_1")
+
+        assertEquals("/api/v1/pairing/requests/pairreq_1/cancel", server.takeRequest().path)
+
+        server.enqueue(jsonResponse("""{"code":40107,"message":"Pairing request already handled","data":null}""", 409))
+        repository.cancelPairingRequest("pairreq_1")
     }
 
     @Test
@@ -174,7 +366,28 @@ class RealClanRepositoryTest {
         assertEquals(DeviceCredentials("dev_migrated", "server-token"), credentials.saved.single())
     }
 
-    private fun repository() = RealClanRepository.create(server.url("/").toString(), credentials)
+    private fun repository() = RealClanRepository.create(server.url("/").toString(), credentials, realtime)
+
+    private suspend fun initializedRepository(
+        selfId: String = "dev_self",
+        token: String = "token",
+    ): RealClanRepository {
+        credentials.value = DeviceCredentials(selfId, token)
+        server.enqueue(jsonResponse(deviceEnvelope(selfId)))
+        val repository = repository()
+        repository.initializeSelf(registration)
+        assertEquals("/api/v1/devices/me", server.takeRequest().path)
+        return repository
+    }
+
+    private fun bindingJson(id: String, online: Boolean = true) =
+        """{"deviceId":"$id","deviceName":"妈妈的手机","platform":"ANDROID","model":"Pixel 8","androidVersion":"16","online":$online,"lastSeenAt":"2026-09-13T02:03:04Z","boundAt":"2026-09-02T00:00:00Z","createdAt":"2026-09-01T00:00:00Z"}"""
+
+    private fun listEnvelope(vararg bindings: String) =
+        """{"code":0,"message":"success","data":[${bindings.joinToString(",")}]}"""
+
+    private fun dataEnvelope(data: String) =
+        """{"code":0,"message":"success","data":$data}"""
 
     private fun jsonResponse(body: String, status: Int = 200) = MockResponse()
         .setResponseCode(status)
@@ -186,6 +399,22 @@ class RealClanRepositoryTest {
 
     private fun deviceEnvelope(id: String) =
         """{"code":0,"message":"success","data":{"deviceId":"$id","deviceName":"Pixel 8","platform":"ANDROID","model":"Pixel 8","androidVersion":"16","online":true,"lastSeenAt":"invalid-time","createdAt":"2026-09-13T02:03:04Z"}}"""
+
+    private class FakeWebSocketClient : WebSocketClient {
+        override val state: StateFlow<WsState> = MutableStateFlow(WsState.Connected)
+        override val failure: StateFlow<WsFailure?> = MutableStateFlow(null)
+        private val frames = MutableSharedFlow<WsFrame>(extraBufferCapacity = 8)
+        override val incoming = frames.asSharedFlow()
+        var startedUrl: String? = null
+        var startedToken: String? = null
+
+        override fun start(url: String, token: String) {
+            startedUrl = url
+            startedToken = token
+        }
+
+        override fun stop() = Unit
+    }
 
     private class FakeCredentialStore : DeviceCredentialStore {
         var value: DeviceCredentials? = null

@@ -1,16 +1,18 @@
 package com.fantaysea.clan.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -33,17 +35,23 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+
+/** 6 位输入格在宽屏下的最大边长与格间距。 */
+private val MaxDigitBoxSize = 52.dp
+private val DigitBoxGap = 8.dp
+private const val CodeLength = 6
 
 /**
  * 通用 6 位数字码输入框:
  * - 底层隐藏 BasicTextField 承接 IME 输入(数字键盘);
  * - 上方渲染 6 个格子, 逐位高亮 + 光标闪烁 + 输入缩放动画;
+ * - 格子按可用宽度等分, 窄屏/弹窗内不会裁掉最后几位;
  * - 满 6 位自动收起键盘并回调 [onComplete](由调用方做校验/清空)。
  */
 @Composable
@@ -67,21 +75,28 @@ fun SixDigitCodeInput(
         label = "cursorAlpha",
     )
 
-    val borderColor = when {
-        error -> MaterialTheme.colorScheme.error
-        focused -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.outline
-    }
+    BoxWithConstraints(modifier = modifier) {
+        // 预留 8dp 余量: 吸收 dp→px 的取整误差, 也给错误抖动动画留出左右空间。
+        val boxSize = ((maxWidth - DigitBoxGap * (CodeLength - 1) - 8.dp) / CodeLength)
+            .coerceIn(0.dp, MaxDigitBoxSize)
+        val digitFontSize = with(LocalDensity.current) { (boxSize * 0.46f).toSp() }
+        val boxShape = RoundedCornerShape(boxSize * 0.27f)
+        // 输入完成后不再把光标画在已有数字上。
+        val cursorIndex = value.length.coerceAtMost(CodeLength - 1)
 
-    Box(modifier = modifier) {
         // 格子
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            repeat(6) { index ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(DigitBoxGap, Alignment.CenterHorizontally),
+        ) {
+            repeat(CodeLength) { index ->
                 val digit = value.getOrNull(index)
-                val isCurrent = focused && index == value.length.coerceAtMost(5)
-                val boxBorder = if (error) MaterialTheme.colorScheme.error
-                else if (isCurrent) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.outline
+                val isCurrent = focused && index == cursorIndex
+                val boxBorder = when {
+                    error -> MaterialTheme.colorScheme.error
+                    isCurrent -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.outline
+                }
 
                 val digitScale by animateFloatAsState(
                     targetValue = if (digit != null) 1f else 0.7f,
@@ -91,22 +106,22 @@ fun SixDigitCodeInput(
 
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .size(boxSize)
+                        .clip(boxShape)
                         .background(MaterialTheme.colorScheme.surface)
-                        .border(1.5.dp, boxBorder, RoundedCornerShape(14.dp)),
+                        .border(1.5.dp, boxBorder, boxShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = digit?.toString() ?: "",
-                        style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold),
+                        style = TextStyle(fontSize = digitFontSize, fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.scale(digitScale),
                     )
-                    if (isCurrent) {
+                    if (isCurrent && digit == null) {
                         Box(
                             modifier = Modifier
-                                .size(width = 2.dp, height = 28.dp)
+                                .size(width = 2.dp, height = boxSize * 0.54f)
                                 .alpha(cursorAlpha)
                                 .clip(RoundedCornerShape(1.dp))
                                 .background(MaterialTheme.colorScheme.primary),
@@ -120,9 +135,9 @@ fun SixDigitCodeInput(
         BasicTextField(
             value = value,
             onValueChange = { raw ->
-                val digits = raw.filter { it.isDigit() }.take(6)
+                val digits = raw.filter { it.isDigit() }.take(CodeLength)
                 if (digits != value) onValueChange(digits)
-                if (digits.length == 6) {
+                if (digits.length == CodeLength) {
                     keyboard?.hide()
                     onComplete(digits)
                 }
@@ -137,7 +152,8 @@ fun SixDigitCodeInput(
             cursorBrush = SolidColor(Color.Transparent),
             textStyle = TextStyle(color = Color.Transparent),
         )
-    }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        // 放在 BoxWithConstraints 内部, 确保子组合中的输入框节点已挂载后再请求焦点。
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    }
 }

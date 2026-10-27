@@ -4,14 +4,14 @@
 `clan` (家助) — Android app for remote screen control (controller remotely operates a controlled phone). Single-module Jetpack Compose app, package `com.fantaysea.clan`.
 
 ## Current state
-UI closed loop is implemented and driven by a local mock backend:
+UI closed loop is implemented and wired to the real backend; server-side control-session endpoints are not available yet:
 - Navigation: `core/navigation` (`AppNavigation`, `HomeNavGraph`) with onboarding → home (`ui/home`) → `ui/control` / `ui/share` / `ui/session`.
 - Navigation is reached through `Navigator` (`core/navigation/Navigator.kt`), exposed to the whole `NavHost` subtree via `LocalNavigator` (`staticCompositionLocalOf`, default `NoOpNavigator`). Screens call `LocalNavigator.current.navigateTo(...)` / `.back()` — they never touch `NavController`. `NavController.asNavigator()` is the single adapter point; keep it that way.
 - `navigateTo` accepts `AppDestination` (`core/navigation/AppDestination.kt`), a plain marker interface — each module declares its own `@Serializable sealed interface XxxDestination : AppDestination`, so adding a module never changes `Navigator`. Register the destination (`composable<XxxDestination.Xxx>` / its own `navigation<XxxGraph>`) in `AppNavigation`; the NavController resolves the target across the whole graph, so cross-module jumps work as-is.
 - UI code must not import `androidx.navigation.NavController`. `NavController` stays confined to `core/navigation`.
-- Backend: `data/mock/MockServer` (in-memory state + event flow) behind `data/repository/ClanRepository`; UI and ViewModels don't change when a real backend replaces it.
-- Reserved skeletons, **not functional**: `data/remote/ClanApi`, `data/ws/*`, `media/ScreenCaptureManager`, `media/WebRtcManager`, `service/ScreenCaptureService`. MediaProjection / WebRTC / AccessibilityService are not implemented — don't assume they work.
-- Unit tests in `app/src/test` cover pairing-code logic, code input, and `MockServer` flows.
+- Backend: `data/repository/RealClanRepository` implements `ClanRepository` over REST (`data/remote/ClanApi`) and WebSocket (`data/ws/*`); `ClanApplication` wires it for the whole app. Control-session methods currently throw `BackendCapabilityUnavailableException`.
+- Reserved skeletons, **not functional**: `media/ScreenCaptureManager`, `media/WebRtcManager`, `service/ScreenCaptureService`. MediaProjection / WebRTC / AccessibilityService are not implemented — don't assume they work.
+- Unit tests in `app/src/test` cover pairing-code logic, code input, `RealClanRepository` API/WebSocket behavior, and ViewModel capability gating.
 
 ## Build (Windows)
 - Use the Gradle wrapper: `.\gradlew.bat ...` — not a system Gradle (wrapper = Gradle 9.5.0).

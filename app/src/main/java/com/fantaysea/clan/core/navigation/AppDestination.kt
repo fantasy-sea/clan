@@ -35,10 +35,10 @@ sealed interface HomeDestination : AppDestination {
     data object Share : HomeDestination
 
     @Serializable
-    data class ControlSession(val deviceId: Long) : HomeDestination
+    data class ControlSession(val deviceId: String) : HomeDestination
 
     @Serializable
-    data class ControlledSession(val deviceId: Long) : HomeDestination
+    data class ControlledSession(val deviceId: String) : HomeDestination
 }
 
 /** home 域嵌套导航图(仅用于成组管理与冷启动入口) */

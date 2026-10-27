@@ -5,13 +5,14 @@
     <!-- 欢迎页第 3 步会请求通知权限(Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- 远程配对/控制: WebSocket 信令(预留, 后续接服务端) -->
+    <!-- 远程配对/控制: WebSocket 信令 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 屏幕捕获: 前台服务 + MediaProjection 类型 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <application
+        android:name=".ClanApplication"
         android:allowBackup="true"
         android:usesCleartextTraffic="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

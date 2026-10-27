@@ -6,7 +6,7 @@ import kotlin.random.Random
  * 配对码纯逻辑(无 Android 依赖, 便于单测)。
  *
  * 规则: 固定 6 位十进制数字, 有效期 [VALIDITY_MS](60 秒)。
- * 真实实现中生成逻辑在服务端(PairingCode 表), 此处的随机生成仅供 Mock 与测试对齐。
+ * 真实实现中生成逻辑在服务端(PairingCode 表), 此处的随机生成仅用于本地测试。
  */
 object PairingCodeGenerator {
     const val CODE_LENGTH = 6

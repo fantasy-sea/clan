@@ -40,15 +40,7 @@ private fun ControlHomePreviewContent(state: ControlHomeUiState) {
         ControlHomeScreenContent(
             state = state,
             snackbarHostState = remember { SnackbarHostState() },
-            onBack = {},
-            onOpenPairDialog = {},
-            onRetry = {},
-            onPairDialogDismiss = {},
-            onPairCodeChanged = {},
-            onPairCodeComplete = {},
-            onRequestControl = {},
-            onDeleteDevice = {},
-            onCancelControl = {},
+            actions = ControlHomeActions(),
         )
     }
 }
@@ -98,6 +90,54 @@ private fun ControlHomeWaitingPreview() {
             pendingControl = previewDeviceList.first(),
         ),
     )
+}
+
+@Preview(name = "多选批量删除", group = "页面状态", showBackground = true)
+@Composable
+private fun ControlHomeSelectionPreview() {
+    ControlHomePreviewContent(
+        state = ControlHomeUiState(
+            pageState = DeviceListState.Success(previewDeviceList),
+            selectionMode = true,
+            selectedDeviceIds = setOf(previewDeviceList.first().device.id),
+        ),
+    )
+}
+
+@Preview(
+    name = "编辑设备弹窗",
+    group = "弹窗",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 640
+)
+@Composable
+private fun EditDeviceDialogPreview() {
+    ClanTheme {
+        EditDeviceDialog(
+            target = previewDeviceList.first(),
+            name = previewDeviceList.first().device.deviceName,
+            saving = false,
+            error = null,
+            onNameChanged = {},
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview(
+    name = "批量删除确认弹窗",
+    group = "弹窗",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 640
+)
+@Composable
+private fun BatchDeleteDialogPreview() {
+    ClanTheme {
+        BatchDeleteDevicesDialog(count = 2, onConfirm = {}, onDismiss = {})
+    }
 }
 
 @Preview(

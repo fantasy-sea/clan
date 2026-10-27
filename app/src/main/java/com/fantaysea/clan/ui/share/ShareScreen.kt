@@ -25,7 +25,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +75,7 @@ fun ShareScreen() {
     LaunchedEffect(state.controlledSessionPeer) {
         val peer = state.controlledSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        navigator.navigateTo(HomeDestination.ControlledSession(peer.id.toLong()))
+        navigator.navigateTo(HomeDestination.ControlledSession(peer.id))
     }
 
     LaunchedEffect(Unit) {
@@ -92,9 +90,9 @@ fun ShareScreen() {
         vm.onPermissionResult(captureManager.isGranted)
     }
 
-    // 与系统授权保持同步(进程内已授权则直接进入)
-    LaunchedEffect(state.pairingAvailable) {
-        if (state.pairingAvailable) vm.onPermissionResult(captureManager.isGranted)
+    // 与系统授权保持同步(进程内已授权则直接显示为已授权)；配对码生成不依赖它。
+    LaunchedEffect(Unit) {
+        if (captureManager.isGranted) vm.onPermissionResult(granted = true)
     }
 
     Scaffold(
@@ -139,16 +137,13 @@ fun ShareScreen() {
         ) {
             if (!state.pairingAvailable) {
                 ShareUnavailable()
-            } else when (state.permissionState) {
-                //具备权限显示匹配界面
-                SharePermissionState.Granted -> ShareContent(state = state)
-                //没有权限（权限被拒绝、或没有）
-                else -> PermissionGate(
-                    //denied为false时为尚未请求该权限
-                    denied = state.permissionState == SharePermissionState.Denied,
-                    onRequest = {
+            } else {
+                ShareContent(
+                    state = state,
+                    onRequestCapture = {
                         permissionLauncher.launch(captureManager.createCaptureIntent())
                     },
+                    onRetryPairingCode = { vm.retryPairingCode() },
                 )
             }
         }
@@ -216,7 +211,7 @@ private fun ShareUnavailable() {
         Text("服务端暂未支持", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "配对与实时会话接口尚未开放，无需授予投屏权限",
+            "配对与实时会话接口尚未开放",
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -224,67 +219,66 @@ private fun ShareUnavailable() {
 }
 
 @Composable
-private fun PermissionGate(denied: Boolean, onRequest: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun CapturePermissionCard(
+    permission: SharePermissionState,
+    onRequest: () -> Unit,
+) {
+    val granted = permission == SharePermissionState.Granted
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
     ) {
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.tertiary,
-                        ),
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (granted) ColorGreen.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                     ),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(44.dp),
-            )
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = if (denied) "请先授权方可使用" else "授权屏幕捕获",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = if (denied) {
-                "共享屏幕需要系统屏幕捕获权限。\n授权后仅在主动连接时才会开启投屏。"
-            } else {
-                "共享屏幕需要系统屏幕捕获权限。\n授权后本机屏幕画面将通过安全通道传输给控制端。"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(28.dp))
-        Button(
-            onClick = onRequest,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-        ) {
-            Text(if (denied) "重新授权" else "同意并授权")
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
+                    contentDescription = null,
+                    tint = if (granted) ColorGreen else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (granted) "投屏权限已授权" else "投屏权限未授权",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = if (granted) "收到控制请求并可共享屏幕"
+                    else "配对无需该权限；需要投屏时再授权",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!granted) {
+                TextButton(onClick = onRequest) {
+                    Text(if (permission == SharePermissionState.Denied) "重新授权" else "授权")
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ShareContent(state: ShareUiState) {
+private fun ShareContent(
+    state: ShareUiState,
+    onRequestCapture: () -> Unit,
+    onRetryPairingCode: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -353,7 +347,7 @@ private fun ShareContent(state: ShareUiState) {
                 )
                 Spacer(modifier = Modifier.height(14.dp))
 
-                if (state.generating) {
+                if (state.code.isBlank()) {
                     Text(
                         text = "—— ——",
                         style = MaterialTheme.typography.displayMedium,
@@ -361,6 +355,24 @@ private fun ShareContent(state: ShareUiState) {
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.outline,
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val pairError = state.pairError
+                    if (pairError != null) {
+                        Text(
+                            text = pairError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TextButton(onClick = onRetryPairingCode) { Text("重新生成") }
+                    } else {
+                        Text(
+                            text = "正在获取配对码…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 } else {
                     Text(
                         text = state.code.chunked(3).joinToString("  "),
@@ -369,33 +381,33 @@ private fun ShareContent(state: ShareUiState) {
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = 4.sp,
                     )
-                }
 
-                Spacer(modifier = Modifier.height(22.dp))
+                    Spacer(modifier = Modifier.height(22.dp))
 
-                // 有效时间环形指示器
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CountdownRing(
-                        fraction = state.remainingMillis.toFloat() / VALIDITY_MS.toFloat(),
-                        remainingSeconds = (state.remainingMillis / 1000L).toInt(),
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            text = "有效时间",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // 有效时间环形指示器
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CountdownRing(
+                            fraction = state.remainingMillis.toFloat() / VALIDITY_MS.toFloat(),
+                            remainingSeconds = (state.remainingMillis / 1000L).toInt(),
                         )
-                        Text(
-                            text = "${(state.remainingMillis / 1000L).toInt()} 秒",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = "到期自动刷新配对码",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = "有效时间",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = "${(state.remainingMillis / 1000L).toInt()} 秒",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "到期自动刷新配对码",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -407,6 +419,12 @@ private fun ShareContent(state: ShareUiState) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+        CapturePermissionCard(
+            permission = state.permissionState,
+            onRequest = onRequestCapture,
         )
     }
 }

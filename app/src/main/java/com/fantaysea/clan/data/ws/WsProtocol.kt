@@ -1,59 +1,97 @@
 package com.fantaysea.clan.data.ws
 
-import com.fantaysea.clan.data.model.Device
+import java.net.URI
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
- * WebSocket 信令消息协议(预留, 服务端就绪后启用)。
- *
- * 消息帧建议结构: { "type": "match_request", "request_id": "...", "payload": { ... } }。
- * 这里以密封类表达类型安全的协议视图, 后续用 kotlinx.serialization 做 JSON 编解码。
+ * 服务端 WebSocket 帧：{type, requestId, sessionId, timestamp, payload}。
+ * 客户端只依赖 type 和 payload；timestamp 不参与权限/超时判断。
  */
-sealed class WsMessage {
+@Serializable
+data class WsFrame(
+    val type: String,
+    val requestId: String? = null,
+    val sessionId: String? = null,
+    val timestamp: Long = 0,
+    val payload: JsonObject? = null,
+)
 
-    /** 建立连接后上报本机身份 */
-    data class Hello(val deviceToken: String) : WsMessage()
+/** 服务端事件中的设备摘要。 */
+@Serializable
+data class WsDeviceSummary(
+    val deviceId: String,
+    val deviceName: String,
+    val platform: String,
+    val model: String? = null,
+    val androidVersion: String? = null,
+)
 
-    /** 控制端提交匹配码 */
-    data class PairCodeSubmit(val code: String) : WsMessage()
+@Serializable
+data class WsPairingRequestPayload(
+    val requester: WsDeviceSummary,
+    val expiresAt: String? = null,
+)
 
-    /** 服务端推给被控端: 有控制端请求配对 */
-    data class MatchRequest(
-        val requestId: String,
-        val requester: Device,
-    ) : WsMessage()
+@Serializable
+data class WsPairingResultPayload(
+    val result: String,
+    val expiresAt: String? = null,
+)
 
-    /** 被控端应答配对 */
-    data class MatchResponse(
-        val requestId: String,
-        val accept: Boolean,
-    ) : WsMessage()
+@Serializable
+data class WsPairingSucceededPayload(
+    val device: WsDeviceSummary,
+)
 
-    /** 服务端推给控制端: 配对成功, 携带新设备 */
-    data class PairingConfirmed(val pairedDevice: Device) : WsMessage()
+/** DEVICE_ONLINE / DEVICE_OFFLINE 的载荷。 */
+@Serializable
+data class WsPresencePayload(
+    val deviceId: String,
+    val lastSeenAt: String? = null,
+)
 
-    /** 服务端推给被控端: 有控制端请求控制 */
-    data class ControlRequest(
-        val requestId: String,
-        val controller: Device,
-    ) : WsMessage()
+/**
+ * 后端 WebSocket 协议编解码。
+ * 认证方式：连接建立后立即发送 AUTH，token 放在 payload 内，绝不拼到 URL。
+ */
+object WsProtocol {
+    val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
-    /** 被控端应答控制 */
-    data class ControlResponse(
-        val requestId: String,
-        val accept: Boolean,
-    ) : WsMessage()
+    fun authMessage(deviceToken: String, requestId: String): String = json.encodeToString(
+        WsFrame(
+            type = "AUTH",
+            requestId = requestId,
+            timestamp = System.currentTimeMillis(),
+            payload = buildJsonObject { put("deviceToken", deviceToken) },
+        ),
+    )
 
-    /** 服务端推给双方: 会话建立 */
-    data class SessionStarted(val peer: Device) : WsMessage()
+    fun pingMessage(requestId: String): String = json.encodeToString(
+        WsFrame(
+            type = "PING",
+            requestId = requestId,
+            timestamp = System.currentTimeMillis(),
+            payload = buildJsonObject { },
+        ),
+    )
 
-    /** 服务端推给双方: 会话结束 */
-    data class SessionEnded(val peer: Device) : WsMessage()
+    fun parse(text: String): WsFrame? = runCatching { json.decodeFromString<WsFrame>(text) }.getOrNull()
 
-    /** 错误回执(code 供客户端定位) */
-    data class Error(val code: String, val message: String) : WsMessage()
-
-    /** 心跳(客户端定时发送, 服务端回 Pong 保持在线状态) */
-    object Heartbeat : WsMessage()
-
-    object Pong : WsMessage()
+    /** 由 REST baseUrl 推导 `/ws` 根路径；忽略 baseUrl 自带的路径前缀。 */
+    fun toWebSocketUrl(baseUrl: String): String {
+        val uri = URI(baseUrl)
+        val scheme = when (uri.scheme?.lowercase()) {
+            "https", "wss" -> "wss"
+            "http", "ws" -> "ws"
+            else -> throw IllegalArgumentException("Unsupported base URL scheme: ${uri.scheme}")
+        }
+        val host = uri.host ?: throw IllegalArgumentException("Base URL has no host: $baseUrl")
+        return URI(scheme, null, host, uri.port, "/ws", null, null).toString()
+    }
 }

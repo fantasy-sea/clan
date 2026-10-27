@@ -4,6 +4,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.fantaysea.clan.core.navigation.Navigator
 import com.fantaysea.clan.core.navigation.NoOpNavigator
 import com.fantaysea.clan.data.AppPreferences
+import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
 
 //staticCompositionLocalOf 用于不常变化的、全局需要使用的变量（值发生变化时会追踪重组整个 Provider 的 content 范围）
@@ -13,10 +14,14 @@ val LocalAppPreferences = staticCompositionLocalOf<AppPreferences> {
     //这边声明的是默认值，当没有为staticCompositionLocalOf<AppPreferences> 提供实现时才会调用
     error("未提供本地存储实现")
 }
-val LocalClanRepository =staticCompositionLocalOf<ClanRepository>{
+val LocalClanRepository = staticCompositionLocalOf<ClanRepository> {
     error("无法使用")
 }
 
+/**
+ * 本机设备信息：由 [ClanRepository.self] 提供，初始化完成后才会有值。
+ */
+val LocalSelfDevice = staticCompositionLocalOf<Device?> { null }
 
 /**
  * 全局导航入口: 由 AppNavigation 通过 CompositionLocalProvider 提供。
@@ -26,4 +31,4 @@ val LocalClanRepository =staticCompositionLocalOf<ClanRepository>{
  */
 val LocalNavigator = staticCompositionLocalOf<Navigator> { NoOpNavigator }
 
-val EMPTY_FUNCTION ={}
+val EMPTY_FUNCTION = {}
