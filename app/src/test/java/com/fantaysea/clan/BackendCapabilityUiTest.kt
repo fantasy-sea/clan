@@ -1,8 +1,13 @@
 package com.fantaysea.clan
 
 import androidx.lifecycle.viewModelScope
+import com.fantaysea.clan.data.model.ActiveSession
+import com.fantaysea.clan.data.model.ControlCommand
 import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.model.IceCandidate
+import com.fantaysea.clan.data.model.LocalPermissions
 import com.fantaysea.clan.data.model.PairingCode
+import com.fantaysea.clan.data.model.SessionInfo
 import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.DeviceRegistration
@@ -303,6 +308,10 @@ class BackendCapabilityUiTest {
         private val eventFlow = MutableSharedFlow<RemoteEvent>(extraBufferCapacity = 8)
         override val events: SharedFlow<RemoteEvent> = eventFlow
         override val self: StateFlow<Device?> = MutableStateFlow(null)
+        private val activeSessionFlow = MutableStateFlow<ActiveSession?>(null)
+        override val activeSession: StateFlow<ActiveSession?> = activeSessionFlow
+        private val localPermissionsFlow = MutableStateFlow(LocalPermissions())
+        override val localPermissions: StateFlow<LocalPermissions> = localPermissionsFlow
         var fetchCount = 0
         var pairingCodeCount = 0
         var cancelCount = 0
@@ -329,8 +338,30 @@ class BackendCapabilityUiTest {
             cancelCount++
             canceledRequestIds += requestId
         }
-        override suspend fun sendControlRequest(deviceId: String): String = error("not used")
-        override suspend fun respondControl(requestId: String, accept: Boolean) = Unit
-        override suspend fun endSession(peerDeviceId: String) = Unit
+        override suspend fun sendControlRequest(device: Device): SessionInfo = error("not used")
+        override suspend fun respondControl(sessionId: String, accept: Boolean): SessionInfo = error("not used")
+        override suspend fun endSession(sessionId: String) = Unit
+        override suspend fun sendControl(sessionId: String, command: ControlCommand): String = "ctl_test"
+        override suspend fun sendControlResult(
+            sessionId: String,
+            requestId: String,
+            ok: Boolean,
+            reason: String? = null,
+        ) = Unit
+
+        override suspend fun sendPermissionStatus(
+            sessionId: String,
+            screenCapture: Boolean,
+            accessibility: Boolean,
+        ) = Unit
+
+        override suspend fun sendSessionConnected(sessionId: String) = Unit
+        override suspend fun sendWebRtcOffer(sessionId: String, requestId: String, sdp: String) = Unit
+        override suspend fun sendWebRtcAnswer(sessionId: String, requestId: String, sdp: String) = Unit
+        override suspend fun sendIceCandidate(sessionId: String, requestId: String, candidate: IceCandidate) = Unit
+
+        override fun updateLocalPermissions(screenCapture: Boolean, accessibility: Boolean) {
+            localPermissionsFlow.value = LocalPermissions(screenCapture, accessibility)
+        }
     }
 }

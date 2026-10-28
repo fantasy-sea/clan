@@ -1,5 +1,7 @@
 package com.fantaysea.clan.data.ws
 
+import com.fantaysea.clan.data.model.ControlCommand
+import com.fantaysea.clan.data.model.IceCandidate
 import java.net.URI
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -63,7 +65,7 @@ data class WsPresencePayload(
 object WsProtocol {
     val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
-    fun authMessage(deviceToken: String, requestId: String): String = json.encodeToString(
+    fun authMessage(deviceToken: String, requestId: String): String = encodeFrame(
         WsFrame(
             type = "AUTH",
             requestId = requestId,
@@ -72,7 +74,7 @@ object WsProtocol {
         ),
     )
 
-    fun pingMessage(requestId: String): String = json.encodeToString(
+    fun pingMessage(requestId: String): String = encodeFrame(
         WsFrame(
             type = "PING",
             requestId = requestId,
@@ -80,6 +82,106 @@ object WsProtocol {
             payload = buildJsonObject { },
         ),
     )
+
+    // ── P4：会话 / WebRTC 信令 / 远程控制 ─────────────────────
+
+    fun sessionConnectedMessage(sessionId: String, requestId: String? = null): String =
+        encodeFrame(message("SESSION_CONNECTED", requestId, sessionId, buildJsonObject { }))
+
+    fun webrtcOfferMessage(sessionId: String, requestId: String, sdp: String): String =
+        encodeFrame(message("WEBRTC_OFFER", requestId, sessionId, buildJsonObject { put("sdp", sdp) }))
+
+    fun webrtcAnswerMessage(sessionId: String, requestId: String, sdp: String): String =
+        encodeFrame(message("WEBRTC_ANSWER", requestId, sessionId, buildJsonObject { put("sdp", sdp) }))
+
+    fun iceCandidateMessage(sessionId: String, requestId: String, candidate: IceCandidate): String =
+        encodeFrame(
+            message(
+                type = "ICE_CANDIDATE",
+                requestId = requestId,
+                sessionId = sessionId,
+                payload = buildJsonObject {
+                    put("candidate", candidate.candidate)
+                    candidate.sdpMid?.let { put("sdpMid", it) }
+                    candidate.sdpMLineIndex?.let { put("sdpMLineIndex", it) }
+                    candidate.usernameFragment?.let { put("usernameFragment", it) }
+                },
+            ),
+        )
+
+    fun controlMessage(sessionId: String, requestId: String, command: ControlCommand): String =
+        encodeFrame(
+            message(
+                type = "CONTROL",
+                requestId = requestId,
+                sessionId = sessionId,
+                payload = buildJsonObject {
+                    put("action", command.action)
+                    when (command) {
+                        is ControlCommand.Tap -> {
+                            put("x", command.x)
+                            put("y", command.y)
+                        }
+
+                        is ControlCommand.Swipe -> {
+                            put("startX", command.startX)
+                            put("startY", command.startY)
+                            put("endX", command.endX)
+                            put("endY", command.endY)
+                            put("duration", command.duration)
+                        }
+
+                        ControlCommand.Back, ControlCommand.Home, ControlCommand.Recents -> Unit
+                    }
+                },
+            ),
+        )
+
+    fun controlResultMessage(
+        sessionId: String,
+        requestId: String,
+        ok: Boolean,
+        reason: String? = null,
+    ): String = encodeFrame(
+        message(
+            type = "CONTROL_RESULT",
+            requestId = requestId,
+            sessionId = sessionId,
+            payload = buildJsonObject {
+                put("scope", "COMMAND")
+                put("result", if (ok) "OK" else "FAILED")
+                reason?.let { put("reason", it) }
+            },
+        ),
+    )
+
+    fun permissionStatusMessage(sessionId: String, screenCapture: Boolean, accessibility: Boolean): String =
+        encodeFrame(
+            message(
+                type = "PERMISSION_STATUS",
+                requestId = null,
+                sessionId = sessionId,
+                payload = buildJsonObject {
+                    put("screenCapture", screenCapture)
+                    put("accessibility", accessibility)
+                },
+            ),
+        )
+
+    private fun message(
+        type: String,
+        requestId: String?,
+        sessionId: String?,
+        payload: JsonObject,
+    ): WsFrame = WsFrame(
+        type = type,
+        requestId = requestId,
+        sessionId = sessionId,
+        timestamp = System.currentTimeMillis(),
+        payload = payload,
+    )
+
+    private fun encodeFrame(frame: WsFrame): String = json.encodeToString(frame)
 
     fun parse(text: String): WsFrame? = runCatching { json.decodeFromString<WsFrame>(text) }.getOrNull()
 

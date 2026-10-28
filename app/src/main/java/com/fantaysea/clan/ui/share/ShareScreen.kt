@@ -158,8 +158,8 @@ fun ShareScreen() {
         )
     }
 
-    // 控制请求确认弹窗
-    state.pendingControl?.let { request ->
+    // 控制请求确认弹窗（服务端未开放控制会话时不展示）
+    state.pendingControl?.takeIf { state.controlAvailable }?.let { request ->
         ControlRequestDialog(
             controller = request.controller,
             onReject = { vm.respondControl(accept = false) },

@@ -155,9 +155,187 @@ class WsEventMapperTest {
         assertNull(WsEventMapper.map(WsFrame(type = "PAIRING_RESULT", requestId = "pairreq_1", payload = buildJsonObject { })))
     }
 
+    @Test
+    fun `control request uses session id and controller summary`() {
+        val event = WsEventMapper.map(
+            frame(
+                type = "CONTROL_REQUEST",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("expiresAt", "2026-01-01T00:01:00Z")
+                    putJsonObject("controller") {
+                        put("deviceId", "dev_controller")
+                        put("deviceName", "爸爸的手机")
+                        put("platform", "ANDROID")
+                        put("model", "Pixel 8")
+                    }
+                },
+            ),
+        ) as RemoteEvent.ControlRequest
+
+        assertEquals("session_1", event.sessionId)
+        assertEquals("dev_controller", event.controller.id)
+        assertEquals(Instant.parse("2026-01-01T00:01:00Z").toEpochMilli(), event.expiresAt)
+    }
+
+    @Test
+    fun `session lifecycle events map by session id`() {
+        val started = WsEventMapper.map(
+            frame(
+                type = "SESSION_STARTED",
+                sessionId = "session_1",
+                payload = buildJsonObject { put("connectExpiresAt", "2026-01-01T00:02:00Z") },
+            ),
+        ) as RemoteEvent.SessionStarted
+        assertEquals("session_1", started.sessionId)
+        assertEquals(Instant.parse("2026-01-01T00:02:00Z").toEpochMilli(), started.connectExpiresAt)
+
+        val connected = WsEventMapper.map(
+            frame(
+                type = "SESSION_CONNECTED",
+                sessionId = "session_1",
+                payload = buildJsonObject { put("connectedAt", "2026-01-01T00:03:00Z") },
+            ),
+        ) as RemoteEvent.SessionConnected
+        assertEquals("session_1", connected.sessionId)
+        assertEquals(Instant.parse("2026-01-01T00:03:00Z").toEpochMilli(), connected.connectedAt)
+
+        val ended = WsEventMapper.map(
+            frame("SESSION_ENDED", sessionId = "session_1", payload = buildJsonObject { put("reason", "ENDED_BY_DEVICE") }),
+        ) as RemoteEvent.SessionEnded
+        assertEquals(false, ended.failed)
+        assertEquals("ENDED_BY_DEVICE", ended.reason)
+
+        val failed = WsEventMapper.map(
+            frame("SESSION_FAILED", sessionId = "session_1", payload = buildJsonObject { put("reason", "DEVICE_OFFLINE") }),
+        ) as RemoteEvent.SessionEnded
+        assertEquals(true, failed.failed)
+        assertEquals("DEVICE_OFFLINE", failed.reason)
+    }
+
+    @Test
+    fun `session request result keeps accepted rejected and expired`() {
+        val accepted = WsEventMapper.map(
+            frame(
+                type = "CONTROL_RESULT",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("scope", "SESSION_REQUEST")
+                    put("result", "ACCEPTED")
+                },
+            ),
+        ) as RemoteEvent.ControlResult
+        assertEquals(RemoteEvent.SessionRequestResult.ACCEPTED, accepted.result)
+
+        val rejected = WsEventMapper.map(
+            frame(
+                type = "CONTROL_RESULT",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("scope", "SESSION_REQUEST")
+                    put("result", "REJECTED")
+                },
+            ),
+        ) as RemoteEvent.ControlResult
+        assertEquals(RemoteEvent.SessionRequestResult.REJECTED, rejected.result)
+    }
+
+    @Test
+    fun `control command and command result map`() {
+        val command = WsEventMapper.map(
+            frame(
+                type = "CONTROL",
+                requestId = "ctl_1",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("action", "TAP")
+                    put("x", 0.5)
+                    put("y", 0.25)
+                },
+            ),
+        ) as RemoteEvent.ControlCommandEvent
+        assertEquals("ctl_1", command.requestId)
+        assertEquals("session_1", command.sessionId)
+        assertEquals(com.fantaysea.clan.data.model.ControlCommand.Tap(0.5, 0.25), command.command)
+
+        val result = WsEventMapper.map(
+            frame(
+                type = "CONTROL_RESULT",
+                requestId = "ctl_1",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("scope", "COMMAND")
+                    put("result", "FAILED")
+                    put("reason", "ACCESSIBILITY_DENIED")
+                },
+            ),
+        ) as RemoteEvent.ControlCommandResult
+        assertEquals(RemoteEvent.ControlResultStatus.FAILED, result.result)
+        assertEquals("ACCESSIBILITY_DENIED", result.reason)
+    }
+
+    @Test
+    fun `permission status and error frames map`() {
+        val permission = WsEventMapper.map(
+            frame(
+                type = "PERMISSION_STATUS",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("screenCapture", true)
+                    put("accessibility", false)
+                },
+            ),
+        ) as RemoteEvent.PermissionStatus
+        assertEquals(true, permission.screenCapture)
+        assertEquals(false, permission.accessibility)
+
+        val error = WsEventMapper.map(
+            frame(
+                type = "ERROR",
+                requestId = "ctl_1",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("code", "CONTROL_NOT_ALLOWED")
+                    put("message", "Control not allowed")
+                    put("retryAfter", 3)
+                },
+            ),
+        ) as RemoteEvent.SessionError
+        assertEquals("CONTROL_NOT_ALLOWED", error.code)
+        assertEquals(3L, error.retryAfter)
+    }
+
+    @Test
+    fun `webrtc signaling frames map`() {
+        val offer = WsEventMapper.map(
+            frame(
+                type = "WEBRTC_OFFER",
+                requestId = "sig_1",
+                sessionId = "session_1",
+                payload = buildJsonObject { put("sdp", "v=0-offer") },
+            ),
+        ) as RemoteEvent.WebRtcOffer
+        assertEquals("v=0-offer", offer.sdp)
+
+        val ice = WsEventMapper.map(
+            frame(
+                type = "ICE_CANDIDATE",
+                sessionId = "session_1",
+                payload = buildJsonObject {
+                    put("candidate", "candidate:1")
+                    put("sdpMid", "0")
+                    put("sdpMLineIndex", 0)
+                },
+            ),
+        ) as RemoteEvent.IceCandidateEvent
+        assertEquals("candidate:1", ice.candidate.candidate)
+        assertEquals(0, ice.candidate.sdpMLineIndex)
+    }
+
     private fun frame(
         type: String,
         requestId: String? = null,
         payload: JsonObject? = null,
-    ) = WsFrame(type = type, requestId = requestId, payload = payload)
+        sessionId: String? = null,
+    ) = WsFrame(type = type, requestId = requestId, sessionId = sessionId, payload = payload)
 }

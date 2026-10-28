@@ -8,7 +8,7 @@ import com.fantaysea.clan.data.repository.RealClanRepository
 /**
  * 进程级依赖容器。
  *
- * WebSocket 连接与设备凭证需要跨 Activity 重建存活；放在 Application 中可避免
+ * WebSocket 连接与设备凭证需要跨 Activity 重建存活；repository 放在 Application 中可避免
  * 旋转屏幕后旧 ViewModel 持有已关闭仓库、或新旧连接互相替换的问题。
  */
 class ClanApplication : Application() {

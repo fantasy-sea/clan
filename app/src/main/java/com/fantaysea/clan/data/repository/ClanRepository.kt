@@ -1,8 +1,13 @@
 package com.fantaysea.clan.data.repository
 
 import androidx.compose.runtime.Immutable
+import com.fantaysea.clan.data.model.ActiveSession
+import com.fantaysea.clan.data.model.ControlCommand
 import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.model.IceCandidate
+import com.fantaysea.clan.data.model.LocalPermissions
 import com.fantaysea.clan.data.model.PairingCode
+import com.fantaysea.clan.data.model.SessionInfo
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -36,6 +41,10 @@ enum class BackendCapability {
     REALTIME_SIGNALING,
 }
 
+/**
+ * Repository 在Android 开发中属于数据层 用于数据从哪来、怎么缓存怎么聚合多个数据源、怎么对外暴露
+ * 所以该类用于对接 后端的
+ */
 interface ClanRepository {
     /**
      * 存放当前后端所支持的功能
@@ -43,6 +52,12 @@ interface ClanRepository {
     val capabilities: Set<BackendCapability>
     val events: SharedFlow<RemoteEvent>
     val self: StateFlow<Device?>
+
+    /** 本机当前参与的远程会话；会话结束/失败后清空。 */
+    val activeSession: StateFlow<ActiveSession?>
+
+    /** 本机（被控端）的系统权限，供 PERMISSION_STATUS 回传。 */
+    val localPermissions: StateFlow<LocalPermissions>
 
     /**
      * 初始化注册本设备
@@ -65,9 +80,37 @@ interface ClanRepository {
     suspend fun submitPairingCode(code: String): String
     suspend fun respondMatch(requestId: String, accept: Boolean)
     suspend fun cancelPairingRequest(requestId: String)
-    suspend fun sendControlRequest(deviceId: String): String
-    suspend fun respondControl(requestId: String, accept: Boolean)
-    suspend fun endSession(peerDeviceId: String)
+
+    // ── P4：远程会话与控制 ───────────────────────────────────
+
+    /** 控制端创建会话；成功后 activeSession 记录本机为 CONTROLLER。 */
+    suspend fun sendControlRequest(device: Device): SessionInfo
+
+    /** 被控端接受/拒绝会话；接受成功后 activeSession 记录本机为 CONTROLLED。 */
+    suspend fun respondControl(sessionId: String, accept: Boolean): SessionInfo
+
+    /** 结束当前会话；对已结束的会话按幂等处理。 */
+    suspend fun endSession(sessionId: String)
+
+    /** 发送 CONTROL，返回本次请求的 requestId，供 CONTROL_RESULT 关联。 */
+    suspend fun sendControl(sessionId: String, command: ControlCommand): String
+
+    /** 被控端回传命令执行结果。 */
+    suspend fun sendControlResult(sessionId: String, requestId: String, ok: Boolean, reason: String? = null)
+
+    /** 被控端回传投屏/无障碍权限状态。 */
+    suspend fun sendPermissionStatus(sessionId: String, screenCapture: Boolean, accessibility: Boolean)
+
+    /** WebRTC 连通后发送；真实媒体接入前由会话页作为占位调用。 */
+    suspend fun sendSessionConnected(sessionId: String)
+
+    // WebRTC 信令；媒体层接入后由 WebRtcManager 调用。
+    suspend fun sendWebRtcOffer(sessionId: String, requestId: String, sdp: String)
+    suspend fun sendWebRtcAnswer(sessionId: String, requestId: String, sdp: String)
+    suspend fun sendIceCandidate(sessionId: String, requestId: String, candidate: IceCandidate)
+
+    /** 更新本机权限状态；被控会话页据此发送 PERMISSION_STATUS。 */
+    fun updateLocalPermissions(screenCapture: Boolean, accessibility: Boolean)
 
     /** 释放仓库持有的实时连接；默认无操作，未持有实时连接的实现无需处理。 */
     fun close() {}

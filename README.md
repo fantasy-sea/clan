@@ -11,7 +11,8 @@
 - 实时远程操作（受限于网络环境）
 - 被控方、控制方身份一键切换
 - 首页双入口：`远程控制`（已配对设备列表 / 左滑唤出删除 / 6 位配对码添加设备）与 `共享屏幕`（授权门控 / 6 位匹配码 / 60 秒倒计时自动刷新 / 配对与控制请求确认弹窗）
-- 已接入真实服务端：设备注册、绑定、配对与 WebSocket 实时信令由服务端驱动；控制会话接口尚未开放，相关入口按后端能力隐藏
+- 已接入真实服务端：设备注册、绑定、配对、远程会话（发起/接受/拒绝/结束）与 WebSocket 实时信令由服务端驱动；控制指令、权限状态与 WebRTC 信令已按 P4 契约接入
+- 说明：屏幕采集/视频编码渲染/无障碍触控执行仍为预留层，当前控制页会通过 CONTROL 发送轻触/滑动/返回/Home/最近任务，被控页只做协议回执与展示
 
 ## 快速开始
 
@@ -26,8 +27,13 @@
 ### 当前实现（UI、服务端接入与预留层）
 
 - **UI 流程**：`ui/home`（导航宿主）→ `ui/control`（远程控制）｜`ui/share`（共享屏幕）｜`ui/session`（控制/被控页）
-- **服务端接入**：`data/repository/RealClanRepository` 通过 REST（`data/remote/ClanApi.kt`）与 WebSocket（`data/ws/WsProtocol.kt`、`data/ws/OkHttpWebSocketClient.kt`）连接真实服务端；当前已支持设备注册、设备绑定、配对与实时信令，控制会话接口尚未开放。
+- **服务端接入**：`data/repository/RealClanRepository` 通过 REST（`data/remote/ClanApi.kt`）与 WebSocket（`data/ws/WsProtocol.kt`、`data/ws/OkHttpWebSocketClient.kt`）连接真实服务端；已支持设备注册、绑定、配对、远程会话与控制/信令消息。
+- **P4 会话协议**（与 `clan-service/docs/websocket.md` 对齐）：
+  - REST：`POST /api/v1/sessions`、`GET /api/v1/sessions/{id}`、`POST /api/v1/sessions/{id}/accept|reject|end`；
+  - WebSocket：`SESSION_CONNECTED`、`WEBRTC_OFFER/ANSWER`、`ICE_CANDIDATE`、`CONTROL`、`CONTROL_RESULT`、`PERMISSION_STATUS`；
+  - 服务端事件：`CONTROL_REQUEST`、`SESSION_STARTED`、`SESSION_CONNECTED`、`SESSION_ENDED/FAILED`、`ERROR`；
+  - 控制权在 MVP 中属于控制方；被控页会在进入会话后上报 `SESSION_CONNECTED` 与权限状态（媒体接入前的占位，代码中已标注 TODO）。
 - **预留接口**：
-  - 数据模型 `data/model`：`Device`（Devices 表）、`PairingCode`（PairingCode 表）、`DeviceBinding`（DeviceBinding 表），字段与表一一对应；
+  - 数据模型 `data/model`：`Device`（Devices 表）、`PairingCode`（PairingCode 表）、`DeviceBinding`（DeviceBinding 表）、`SessionInfo/ActiveSession`（会话）；
   - 屏幕捕获：`media/ScreenCaptureManager.kt`（授权管理）、`service/ScreenCaptureService.kt`（前台服务骨架）、`media/WebRtcManager.kt`（视频流接口，待引入 org.webrtc 实现）。
-- **说明**：屏幕捕获 / WebRTC / 无障碍服务为预留骨架；真实画面传输与远程操作将在依赖就绪后在这些接口上实现。
+- **说明**：屏幕捕获 / WebRTC / 无障碍服务为预留骨架；真实画面传输与远程操作将在依赖就绪后在这些接口上实现。当前控制指令只完成 WebSocket 链路和协议回执，尚未真正注入触摸/按键。

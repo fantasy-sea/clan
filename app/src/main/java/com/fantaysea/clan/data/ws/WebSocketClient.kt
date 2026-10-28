@@ -48,4 +48,7 @@ interface WebSocketClient {
 
     fun start(url: String, deviceToken: String)
     fun stop()
+
+    /** 发送一个已编码的文本帧；未连接或 socket 拒绝入队时返回 false。 */
+    fun send(text: String): Boolean
 }

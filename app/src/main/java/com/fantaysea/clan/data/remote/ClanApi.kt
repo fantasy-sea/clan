@@ -73,6 +73,38 @@ interface ClanApi {
         @Header("Authorization") authorization: String,
         @Path("requestId") requestId: String,
     ): Response<ApiEnvelope<PairingRequestResponse>>
+
+    // ── P4：远程会话 ──────────────────────────────────────────
+
+    @POST("api/v1/sessions")
+    suspend fun createSession(
+        @Header("Authorization") authorization: String,
+        @Body request: CreateSessionRequest,
+    ): Response<ApiEnvelope<SessionResponse>>
+
+    @GET("api/v1/sessions/{sessionId}")
+    suspend fun getSession(
+        @Header("Authorization") authorization: String,
+        @Path("sessionId") sessionId: String,
+    ): Response<ApiEnvelope<SessionResponse>>
+
+    @POST("api/v1/sessions/{sessionId}/accept")
+    suspend fun acceptSession(
+        @Header("Authorization") authorization: String,
+        @Path("sessionId") sessionId: String,
+    ): Response<ApiEnvelope<SessionResponse>>
+
+    @POST("api/v1/sessions/{sessionId}/reject")
+    suspend fun rejectSession(
+        @Header("Authorization") authorization: String,
+        @Path("sessionId") sessionId: String,
+    ): Response<ApiEnvelope<SessionResponse>>
+
+    @POST("api/v1/sessions/{sessionId}/end")
+    suspend fun endSession(
+        @Header("Authorization") authorization: String,
+        @Path("sessionId") sessionId: String,
+    ): Response<ApiEnvelope<SessionResponse>>
 }
 
 @Serializable
@@ -144,4 +176,25 @@ data class PairingRequestResponse(
     val status: String,
     val expiresAt: String,
     val handledAt: String? = null,
+)
+
+@Serializable
+data class CreateSessionRequest(val targetDeviceId: String)
+
+/** 与后端 SessionResponse 对齐；时间字段为 UTC ISO-8601。 */
+@Serializable
+data class SessionResponse(
+    val sessionId: String,
+    val controllerDeviceId: String,
+    val controlledDeviceId: String,
+    val status: String,
+    val expiresAt: String? = null,
+    val createdAt: String? = null,
+    val acceptedAt: String? = null,
+    val connectExpiresAt: String? = null,
+    val connectedAt: String? = null,
+    val rejectedAt: String? = null,
+    val endedAt: String? = null,
+    val failedAt: String? = null,
+    val failureReason: String? = null,
 )

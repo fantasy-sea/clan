@@ -2,8 +2,11 @@ package com.fantaysea.clan
 
 import com.fantaysea.clan.data.DeviceCredentialStore
 import com.fantaysea.clan.data.DeviceCredentials
+import com.fantaysea.clan.data.model.ControlCommand
+import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.model.SessionRole
+import com.fantaysea.clan.data.model.SessionStatus
 import com.fantaysea.clan.data.repository.BackendCapability
-import com.fantaysea.clan.data.repository.BackendCapabilityUnavailableException
 import com.fantaysea.clan.data.repository.ClanApiException
 import com.fantaysea.clan.data.repository.DeviceOfflineException
 import com.fantaysea.clan.data.repository.DeviceRegistration
@@ -20,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -163,20 +168,111 @@ class RealClanRepositoryTest {
     }
 
     @Test
-    fun `binding pairing and realtime capabilities are enabled while control remains unsupported`() {
+    fun `binding pairing control session and realtime capabilities are enabled`() {
         val repository = repository()
 
         assertTrue(BackendCapability.DEVICE_BINDINGS in repository.capabilities)
         assertTrue(BackendCapability.PAIRING in repository.capabilities)
+        assertTrue(BackendCapability.CONTROL_SESSIONS in repository.capabilities)
         assertTrue(BackendCapability.REALTIME_SIGNALING in repository.capabilities)
-
-        val error = assertThrows(BackendCapabilityUnavailableException::class.java) {
-            runBlocking { repository.sendControlRequest("dev_peer") }
-        }
-
-        assertEquals(BackendCapability.CONTROL_SESSIONS, error.capability)
-        assertEquals("服务端暂未支持", error.message)
         assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `sendControlRequest creates a session and tracks controller role`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(sessionEnvelope("session_1", "dev_self", "dev_peer", "REQUESTING")))
+        val peer = peer("dev_peer")
+
+        val info = repository.sendControlRequest(peer)
+
+        assertEquals("session_1", info.sessionId)
+        assertEquals(SessionStatus.REQUESTING, info.status)
+        val active = repository.activeSession.value!!
+        assertEquals(SessionRole.CONTROLLER, active.role)
+        assertEquals("dev_peer", active.peer.id)
+        assertEquals("session_1", active.info.sessionId)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v1/sessions", request.path)
+        assertEquals("Bearer token", request.getHeader("Authorization"))
+        assertTrue(request.body.readUtf8().contains("\"targetDeviceId\":\"dev_peer\""))
+    }
+
+    @Test
+    fun `respondControl accept tracks controlled role from bound controller`() = runBlocking {
+        val repository = initializedRepository(selfId = "dev_controlled")
+        server.enqueue(jsonResponse(sessionEnvelope("session_1", "dev_controller", "dev_controlled", "CONNECTING")))
+        server.enqueue(jsonResponse(dataEnvelope(bindingJson("dev_controller"))))
+
+        val info = repository.respondControl("session_1", accept = true)
+
+        assertEquals(SessionStatus.CONNECTING, info.status)
+        val active = repository.activeSession.value!!
+        assertEquals(SessionRole.CONTROLLED, active.role)
+        assertEquals("dev_controller", active.peer.id)
+
+        assertEquals("/api/v1/sessions/session_1/accept", server.takeRequest().path)
+        assertEquals("/api/v1/bindings/dev_controller", server.takeRequest().path)
+    }
+
+    @Test
+    fun `rejectControl clears active session`() = runBlocking {
+        val repository = initializedRepository(selfId = "dev_controlled")
+        server.enqueue(jsonResponse(sessionEnvelope("session_1", "dev_controller", "dev_controlled", "REJECTED")))
+
+        repository.respondControl("session_1", accept = false)
+
+        assertNull(repository.activeSession.value)
+        assertEquals("/api/v1/sessions/session_1/reject", server.takeRequest().path)
+    }
+
+    @Test
+    fun `endSession clears active session and tolerates already ended`() = runBlocking {
+        val repository = initializedRepository()
+        server.enqueue(jsonResponse(sessionEnvelope("session_1", "dev_self", "dev_peer", "REQUESTING")))
+        repository.sendControlRequest(peer("dev_peer"))
+        assertEquals("session_1", repository.activeSession.value?.info?.sessionId)
+
+        server.enqueue(jsonResponse(sessionEnvelope("session_1", "dev_self", "dev_peer", "ENDED")))
+        repository.endSession("session_1")
+        assertNull(repository.activeSession.value)
+        assertEquals("/api/v1/sessions/session_1/end", server.takeRequest().path)
+
+        // 已结束再调用一次按幂等成功处理，不向 UI 抛异常。
+        server.enqueue(jsonResponse("""{"code":40302,"message":"Session is in an invalid state","data":null}""", 409))
+        repository.endSession("session_1")
+    }
+
+    @Test
+    fun `sendControl writes a normalized CONTROL frame`() = runBlocking {
+        val repository = initializedRepository()
+
+        val requestId = repository.sendControl("session_1", ControlCommand.Tap(0.5, 0.25))
+
+        assertTrue(requestId.startsWith("ctl_"))
+        val frame = com.fantaysea.clan.data.ws.WsProtocol.parse(realtime.sent.single())!!
+        assertEquals("CONTROL", frame.type)
+        assertEquals("session_1", frame.sessionId)
+        assertEquals(requestId, frame.requestId)
+        assertEquals("TAP", frame.payload!!["action"]!!.jsonPrimitive.content)
+        assertEquals(0.5, frame.payload!!["x"]!!.jsonPrimitive.double, 0.0)
+    }
+
+    @Test
+    fun `sendPermissionStatus and control result are queued`() = runBlocking {
+        val repository = initializedRepository()
+
+        repository.sendPermissionStatus("session_1", screenCapture = true, accessibility = false)
+        repository.sendControlResult("session_1", "ctl_1", ok = true)
+
+        assertEquals(2, realtime.sent.size)
+        val permission = com.fantaysea.clan.data.ws.WsProtocol.parse(realtime.sent[0])!!
+        assertEquals("PERMISSION_STATUS", permission.type)
+        val result = com.fantaysea.clan.data.ws.WsProtocol.parse(realtime.sent[1])!!
+        assertEquals("CONTROL_RESULT", result.type)
+        assertEquals("COMMAND", result.payload!!["scope"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -366,6 +462,21 @@ class RealClanRepositoryTest {
         assertEquals(DeviceCredentials("dev_migrated", "server-token"), credentials.saved.single())
     }
 
+    private fun peer(id: String) = Device(
+        id = id,
+        deviceName = "妈妈的手机",
+        platform = "ANDROID",
+        model = "Pixel 8",
+        androidVersion = "16",
+        lastOnlineAt = null,
+        createdAt = null,
+    )
+
+    private fun sessionEnvelope(id: String, controller: String, controlled: String, status: String) =
+        dataEnvelope(
+            """{"sessionId":"$id","controllerDeviceId":"$controller","controlledDeviceId":"$controlled","status":"$status","expiresAt":"2026-09-13T02:04:04Z","createdAt":"2026-09-13T02:03:04Z","acceptedAt":null,"connectExpiresAt":"2026-09-13T02:05:04Z","connectedAt":null,"rejectedAt":null,"endedAt":null,"failedAt":null,"failureReason":null}""",
+        )
+
     private fun repository() = RealClanRepository.create(server.url("/").toString(), credentials, realtime)
 
     private suspend fun initializedRepository(
@@ -407,6 +518,7 @@ class RealClanRepositoryTest {
         override val incoming = frames.asSharedFlow()
         var startedUrl: String? = null
         var startedToken: String? = null
+        val sent = mutableListOf<String>()
 
         override fun start(url: String, token: String) {
             startedUrl = url
@@ -414,6 +526,11 @@ class RealClanRepositoryTest {
         }
 
         override fun stop() = Unit
+
+        override fun send(text: String): Boolean {
+            sent += text
+            return true
+        }
     }
 
     private class FakeCredentialStore : DeviceCredentialStore {

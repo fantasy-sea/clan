@@ -2,15 +2,24 @@ package com.fantaysea.clan.data.repository
 
 import com.fantaysea.clan.data.DeviceCredentialStore
 import com.fantaysea.clan.data.DeviceCredentials
+import com.fantaysea.clan.data.model.ActiveSession
+import com.fantaysea.clan.data.model.ControlCommand
 import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.model.IceCandidate
+import com.fantaysea.clan.data.model.LocalPermissions
 import com.fantaysea.clan.data.model.PairingCode
+import com.fantaysea.clan.data.model.SessionInfo
+import com.fantaysea.clan.data.model.SessionRole
+import com.fantaysea.clan.data.model.SessionStatus
 import com.fantaysea.clan.data.remote.ApiEnvelope
 import com.fantaysea.clan.data.remote.BindingResponse
 import com.fantaysea.clan.data.remote.ClanApi
+import com.fantaysea.clan.data.remote.CreateSessionRequest
 import com.fantaysea.clan.data.remote.DeviceResponse
 import com.fantaysea.clan.data.remote.PairingVerifyRequest
 import com.fantaysea.clan.data.remote.RegisterDeviceRequest
 import com.fantaysea.clan.data.remote.RenameDeviceRequest
+import com.fantaysea.clan.data.remote.SessionResponse
 import com.fantaysea.clan.data.ws.OkHttpWebSocketClient
 import com.fantaysea.clan.data.ws.WsEventMapper
 import com.fantaysea.clan.data.ws.WsFailure
@@ -19,6 +28,8 @@ import com.fantaysea.clan.data.ws.WsState
 import com.fantaysea.clan.data.ws.WebSocketClient
 import java.time.Instant
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,6 +66,7 @@ class RealClanRepository(
         BackendCapability.DEVICE_IDENTITY,
         BackendCapability.DEVICE_BINDINGS,
         BackendCapability.PAIRING,
+        BackendCapability.CONTROL_SESSIONS,
         BackendCapability.REALTIME_SIGNALING,
     )
     private val mutableSelf = MutableStateFlow<Device?>(null)
@@ -62,10 +74,22 @@ class RealClanRepository(
     private val mutableEvents = MutableSharedFlow<RemoteEvent>(extraBufferCapacity = 32)
     override val events: SharedFlow<RemoteEvent> = mutableEvents.asSharedFlow()
 
+    private val mutableActiveSession = MutableStateFlow<ActiveSession?>(null)
+    override val activeSession: StateFlow<ActiveSession?> = mutableActiveSession.asStateFlow()
+    private val mutableLocalPermissions = MutableStateFlow(LocalPermissions())
+    override val localPermissions: StateFlow<LocalPermissions> = mutableLocalPermissions.asStateFlow()
+
+    /** 被控端收到 CONTROL_REQUEST 后暂存控制方，接受时用于构造 ActiveSession。 */
+    private val pendingControlRequests = ConcurrentHashMap<String, Device>()
+    private val requestSequence = AtomicLong()
+
     init {
         scope.launch {
             realtime.incoming.collect { frame ->
-                WsEventMapper.map(frame)?.let { mutableEvents.emit(it) }
+                val event = WsEventMapper.map(frame) ?: return@collect
+                // 状态同步失败不能中断事件流；可见状态仍可由 REST 对账兜底。
+                runCatching { applySessionEvent(event) }
+                mutableEvents.emit(event)
             }
         }
     }
@@ -330,22 +354,244 @@ class RealClanRepository(
         else -> error
     }
 
-    override suspend fun sendControlRequest(deviceId: String): String =
-        unsupported(BackendCapability.CONTROL_SESSIONS)
+    override suspend fun sendControlRequest(device: Device): SessionInfo {
+        ensureRealtime()
+        val response = try {
+            safeApiCall { api.createSession(authorization(), CreateSessionRequest(device.id)) }.requireData()
+        } catch (error: ClanApiException) {
+            throw sessionError(error)
+        }
+        val info = response.toSessionInfo()
+        mutableActiveSession.value = ActiveSession(info, device, SessionRole.CONTROLLER)
+        return info
+    }
 
-    override suspend fun respondControl(requestId: String, accept: Boolean): Unit =
-        unsupported(BackendCapability.CONTROL_SESSIONS)
+    override suspend fun respondControl(sessionId: String, accept: Boolean): SessionInfo {
+        ensureRealtime()
+        val response = try {
+            safeApiCall {
+                if (accept) api.acceptSession(authorization(), sessionId)
+                else api.rejectSession(authorization(), sessionId)
+            }.requireData()
+        } catch (error: ClanApiException) {
+            throw sessionError(error)
+        }
+        val info = response.toSessionInfo()
+        if (accept) {
+            val peer = pendingControlRequests.remove(sessionId)
+                ?: runCatching { findDevice(info.controllerDeviceId) }.getOrNull()
+            if (peer != null) {
+                mutableActiveSession.value = ActiveSession(info, peer, SessionRole.CONTROLLED)
+            }
+        } else {
+            pendingControlRequests.remove(sessionId)
+            if (mutableActiveSession.value?.info?.sessionId == sessionId) {
+                mutableActiveSession.value = null
+            }
+        }
+        return info
+    }
 
-    override suspend fun endSession(peerDeviceId: String): Unit =
-        unsupported(BackendCapability.CONTROL_SESSIONS)
+    override suspend fun endSession(sessionId: String) {
+        try {
+            safeApiCall { api.endSession(authorization(), sessionId) }.requireSuccess()
+        } catch (error: ClanApiException) {
+            // 已结束/已过期按幂等成功处理；无权限和网络错误继续抛给 UI。
+            if (error.businessCode != SESSION_NOT_FOUND && error.businessCode != SESSION_INVALID_STATE) throw error
+        } finally {
+            pendingControlRequests.remove(sessionId)
+            if (mutableActiveSession.value?.info?.sessionId == sessionId) {
+                mutableActiveSession.value = null
+            }
+        }
+    }
+
+    override suspend fun sendControl(sessionId: String, command: ControlCommand): String {
+        val requestId = nextRequestId("ctl")
+        sendRealtime(WsProtocol.controlMessage(sessionId, requestId, command))
+        return requestId
+    }
+
+    override suspend fun sendControlResult(
+        sessionId: String,
+        requestId: String,
+        ok: Boolean,
+        reason: String? = null,
+    ) {
+        sendRealtime(WsProtocol.controlResultMessage(sessionId, requestId, ok, reason))
+    }
+
+    override suspend fun sendPermissionStatus(
+        sessionId: String,
+        screenCapture: Boolean,
+        accessibility: Boolean,
+    ) {
+        sendRealtime(WsProtocol.permissionStatusMessage(sessionId, screenCapture, accessibility))
+    }
+
+    override suspend fun sendSessionConnected(sessionId: String) {
+        sendRealtime(WsProtocol.sessionConnectedMessage(sessionId))
+    }
+
+    override suspend fun sendWebRtcOffer(sessionId: String, requestId: String, sdp: String) {
+        sendRealtime(WsProtocol.webrtcOfferMessage(sessionId, requestId, sdp))
+    }
+
+    override suspend fun sendWebRtcAnswer(sessionId: String, requestId: String, sdp: String) {
+        sendRealtime(WsProtocol.webrtcAnswerMessage(sessionId, requestId, sdp))
+    }
+
+    override suspend fun sendIceCandidate(sessionId: String, requestId: String, candidate: IceCandidate) {
+        sendRealtime(WsProtocol.iceCandidateMessage(sessionId, requestId, candidate))
+    }
+
+    override fun updateLocalPermissions(screenCapture: Boolean, accessibility: Boolean) {
+        mutableLocalPermissions.value = LocalPermissions(screenCapture, accessibility)
+    }
+
+    private fun sendRealtime(message: String) {
+        if (!realtime.send(message)) throw ClanServiceException("实时连接未就绪，请稍后重试")
+    }
+
+    private fun nextRequestId(prefix: String): String =
+        "${prefix}_${System.currentTimeMillis()}_${requestSequence.incrementAndGet()}"
+
+    /** 把 P4 事件同步到 activeSession，再把事件广播给 UI。 */
+    private suspend fun applySessionEvent(event: RemoteEvent) {
+        when (event) {
+            is RemoteEvent.RealtimeReady -> reconcileActiveSession()
+
+            is RemoteEvent.ControlRequest -> pendingControlRequests[event.sessionId] = event.controller
+
+            is RemoteEvent.SessionStarted -> {
+                val current = mutableActiveSession.value
+                if (current != null && current.info.sessionId == event.sessionId) {
+                    mutableActiveSession.value = current.copy(
+                        info = current.info.copy(
+                            status = SessionStatus.CONNECTING,
+                            connectExpiresAt = event.connectExpiresAt ?: current.info.connectExpiresAt,
+                        ),
+                    )
+                } else {
+                    ensureActiveSession(event.sessionId, SessionStatus.CONNECTING, event.connectExpiresAt)
+                }
+            }
+
+            is RemoteEvent.SessionConnected -> {
+                val current = mutableActiveSession.value
+                if (current != null && current.info.sessionId == event.sessionId) {
+                    mutableActiveSession.value = current.copy(
+                        info = current.info.copy(
+                            status = SessionStatus.CONNECTED,
+                            connectedAt = event.connectedAt ?: current.info.connectedAt,
+                        ),
+                    )
+                } else {
+                    ensureActiveSession(event.sessionId, SessionStatus.CONNECTED, connectedAt = event.connectedAt)
+                }
+            }
+
+            is RemoteEvent.SessionEnded -> {
+                pendingControlRequests.remove(event.sessionId)
+                if (mutableActiveSession.value?.info?.sessionId == event.sessionId) {
+                    mutableActiveSession.value = null
+                }
+            }
+
+            is RemoteEvent.ControlResult -> {
+                if (event.result != RemoteEvent.SessionRequestResult.ACCEPTED) {
+                    pendingControlRequests.remove(event.sessionId)
+                    if (mutableActiveSession.value?.info?.sessionId == event.sessionId) {
+                        mutableActiveSession.value = null
+                    }
+                }
+            }
+
+            else -> Unit
+        }
+    }
+
+    /**
+     * 重连后主动对账当前会话：断线期间可能已经 CONNECTED / ENDED / FAILED，
+     * 服务端不重放事件，只能按 sessionId 重新查询。
+     */
+    private suspend fun reconcileActiveSession() {
+        val current = mutableActiveSession.value ?: return
+        val response = runCatching {
+            safeApiCall { api.getSession(authorization(), current.info.sessionId) }.requireData()
+        }.getOrNull() ?: return
+        val info = response.toSessionInfo()
+        if (info.status.isActive) {
+            mutableActiveSession.value = current.copy(info = info)
+        } else {
+            mutableActiveSession.value = null
+        }
+    }
+
+    /**
+     * 事件先于 REST 响应到达（或进程内 activeSession 丢失）时的兜底：
+     * 按 sessionId 查询服务端会话，用本机 id 判断角色，再解析对端绑定。
+     */
+    private suspend fun ensureActiveSession(
+        sessionId: String,
+        status: SessionStatus,
+        connectExpiresAt: Long? = null,
+        connectedAt: Long? = null,
+    ) {
+        if (mutableActiveSession.value?.info?.sessionId == sessionId) return
+        val selfId = self.value?.id ?: return
+        val response = runCatching {
+            safeApiCall { api.getSession(authorization(), sessionId) }.requireData()
+        }.getOrNull() ?: return
+        val info = response.toSessionInfo(
+            statusOverride = status,
+            connectExpiresAtOverride = connectExpiresAt,
+            connectedAtOverride = connectedAt,
+        )
+        val peerId = info.peerId(selfId) ?: return
+        val peer = runCatching { findDevice(peerId) }.getOrNull() ?: return
+        val role = if (info.controllerDeviceId == selfId) SessionRole.CONTROLLER else SessionRole.CONTROLLED
+        if (mutableActiveSession.value == null) {
+            mutableActiveSession.value = ActiveSession(info, peer, role)
+        }
+    }
+
+    private fun SessionResponse.toSessionInfo(
+        statusOverride: SessionStatus? = null,
+        connectExpiresAtOverride: Long? = null,
+        connectedAtOverride: Long? = null,
+    ) = SessionInfo(
+        sessionId = sessionId,
+        controllerDeviceId = controllerDeviceId,
+        controlledDeviceId = controlledDeviceId,
+        status = statusOverride ?: SessionStatus.fromWire(status) ?: SessionStatus.FAILED,
+        expiresAt = expiresAt.toEpochMillisOrNull(),
+        createdAt = createdAt.toEpochMillisOrNull(),
+        acceptedAt = acceptedAt.toEpochMillisOrNull(),
+        connectExpiresAt = connectExpiresAtOverride ?: connectExpiresAt.toEpochMillisOrNull(),
+        connectedAt = connectedAtOverride ?: connectedAt.toEpochMillisOrNull(),
+        rejectedAt = rejectedAt.toEpochMillisOrNull(),
+        endedAt = endedAt.toEpochMillisOrNull(),
+        failedAt = failedAt.toEpochMillisOrNull(),
+        failureReason = failureReason,
+    )
+
+    private fun sessionError(error: ClanApiException): Exception = when (error.businessCode) {
+        SESSION_NOT_FOUND -> ClanServiceException("会话不存在或已结束", error)
+        SESSION_INVALID_STATE -> ClanServiceException("会话状态已变化，请重试", error)
+        SESSION_NOT_ALLOWED -> ClanServiceException("无权操作该会话", error)
+        SESSION_CONFLICT -> ClanServiceException("已有进行中的会话", error)
+        DEVICES_NOT_BOUND -> ClanServiceException("设备未绑定，无法发起控制", error)
+        SESSION_REQUEST_EXPIRED, SESSION_CONNECT_TIMEOUT -> ClanServiceException("控制请求已过期", error)
+        DEVICE_OFFLINE -> DeviceOfflineException("对方或本机实时连接不在线，请稍后重试")
+        RATE_LIMITED -> ClanServiceException("操作过于频繁，请稍后再试", error)
+        else -> error
+    }
 
     override fun close() {
         realtime.stop()
         scope.cancel()
     }
-
-    private fun <T> unsupported(capability: BackendCapability): T =
-        throw BackendCapabilityUnavailableException(capability)
 
     private fun DeviceResponse.toDeviceDomain() = Device(
         id = deviceId,
@@ -461,6 +707,13 @@ class RealClanRepository(
         private const val PAIRING_REQUEST_ALREADY_EXISTS = 40109
         private const val BINDING_NOT_FOUND = 40201
         private const val BINDING_ALREADY_EXISTS = 40202
+        private const val SESSION_NOT_FOUND = 40301
+        private const val SESSION_INVALID_STATE = 40302
+        private const val SESSION_NOT_ALLOWED = 40303
+        private const val SESSION_CONFLICT = 40304
+        private const val DEVICES_NOT_BOUND = 40305
+        private const val SESSION_REQUEST_EXPIRED = 40306
+        private const val SESSION_CONNECT_TIMEOUT = 40308
 
         /** 提交配对码前等待实时连接认证完成的上限。 */
         private const val REALTIME_CONNECT_TIMEOUT_MS = 15_000L

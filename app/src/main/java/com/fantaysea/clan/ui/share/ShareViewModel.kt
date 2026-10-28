@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fantaysea.clan.data.PairingCodeGenerator
 import com.fantaysea.clan.data.model.Device
+import com.fantaysea.clan.data.model.SessionRole
+import com.fantaysea.clan.data.model.SessionStatus
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.RemoteEvent
@@ -31,6 +33,8 @@ data class ShareUiState(
     val platform: String = "",
     val deviceIdShort: String = "",
     val pairingAvailable: Boolean = true,
+    /** 服务端是否支持远程控制会话；决定控制请求弹窗是否展示。 */
+    val controlAvailable: Boolean = false,
     val code: String = "",
     val expiresAt: Long = 0L,
     val remainingMillis: Long = 0L,
@@ -48,7 +52,16 @@ class ShareViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        ShareUiState(pairingAvailable = BackendCapability.PAIRING in repository.capabilities),
+        ShareUiState(
+            // 进程内已授权过时保持“投屏就绪”，避免重新进入页面又显示未授权。
+            permissionState = if (repository.localPermissions.value.screenCapture) {
+                SharePermissionState.Granted
+            } else {
+                SharePermissionState.Unknown
+            },
+            pairingAvailable = BackendCapability.PAIRING in repository.capabilities,
+            controlAvailable = BackendCapability.CONTROL_SESSIONS in repository.capabilities,
+        ),
     )
     val uiState: StateFlow<ShareUiState> = _uiState.asStateFlow()
 
@@ -73,6 +86,20 @@ class ShareViewModel(
             }
         }
         viewModelScope.launch { observeEvents() }
+        // 服务端把被控会话推进到 CONNECTING/CONNECTED 后进入被控页。
+        // 以 activeSession 兜底 REST 响应与 SESSION_STARTED 事件的竞态。
+        viewModelScope.launch {
+            repository.activeSession.collect { active ->
+                val pending = _uiState.value.pendingControl ?: return@collect
+                if (active == null || active.role != SessionRole.CONTROLLED) return@collect
+                if (active.info.sessionId != pending.sessionId) return@collect
+                if (active.info.status != SessionStatus.CONNECTING && active.info.status != SessionStatus.CONNECTED) return@collect
+                if (!handled.add("session-started-${pending.sessionId}")) return@collect
+                _uiState.update {
+                    it.copy(pendingControl = null, controlledSessionPeer = active.peer)
+                }
+            }
+        }
         // 配对与投屏权限解耦：进入页面即可生成配对码，投屏权限只影响后续共享。
         if (_uiState.value.pairingAvailable) startPairingCodeSession()
     }
@@ -83,6 +110,8 @@ class ShareViewModel(
         _uiState.update {
             it.copy(permissionState = if (granted) SharePermissionState.Granted else SharePermissionState.Denied)
         }
+        // 真正的屏幕捕获/无障碍能力仍未接入；先把系统授权结果同步给会话层。
+        repository.updateLocalPermissions(screenCapture = granted, accessibility = false)
     }
 
     private fun startPairingCodeSession() {
@@ -159,7 +188,9 @@ class ShareViewModel(
                 is RemoteEvent.MatchResult -> handleMatchResult(event)
                 is RemoteEvent.PairingSucceeded -> handlePairingSucceeded(event)
                 is RemoteEvent.ControlRequest -> handleControlRequest(event)
-                is RemoteEvent.SessionStarted -> handleSessionStarted(event)
+                is RemoteEvent.ControlResult -> handleControlResult(event)
+                is RemoteEvent.SessionEnded -> handleSessionEnded(event)
+                is RemoteEvent.SessionError -> handleSessionError(event)
                 else -> Unit
             }
         }
@@ -191,23 +222,39 @@ class ShareViewModel(
     }
 
     private fun handleControlRequest(event: RemoteEvent.ControlRequest) {
-        if (!handled.add("control-${event.requestId}")) return
+        if (!handled.add("control-${event.sessionId}")) return
         if (_uiState.value.pendingControl == null) {
             _uiState.update { it.copy(pendingControl = event) }
         }
     }
 
-    private fun handleSessionStarted(event: RemoteEvent.SessionStarted) {
-        if (!handled.add("session-${event.requestId}")) return
-        // 本机作为被控端(由共享屏幕页代表被控)且正在等待对方确认 → 进入被控页
-        if (_uiState.value.pendingControl != null) {
-            _uiState.update {
-                it.copy(
-                    pendingControl = null,
-                    controlledSessionPeer = event.controller,
-                )
-            }
+    private fun handleControlResult(event: RemoteEvent.ControlResult) {
+        val pending = _uiState.value.pendingControl ?: return
+        if (pending.sessionId != event.sessionId) return
+        if (event.result == RemoteEvent.SessionRequestResult.ACCEPTED) return
+        if (!handled.add("control-result-${event.sessionId}-${event.result}")) return
+        _uiState.update { it.copy(pendingControl = null) }
+        val message = when (event.result) {
+            RemoteEvent.SessionRequestResult.EXPIRED -> "控制请求已过期"
+            RemoteEvent.SessionRequestResult.REJECTED -> "已拒绝控制"
+            RemoteEvent.SessionRequestResult.FAILED -> "控制请求失败，请重试"
+            RemoteEvent.SessionRequestResult.ACCEPTED -> null
         }
+        message?.let { _messages.tryEmit(it) }
+    }
+
+    private fun handleSessionEnded(event: RemoteEvent.SessionEnded) {
+        val pending = _uiState.value.pendingControl ?: return
+        if (pending.sessionId != event.sessionId) return
+        _uiState.update { it.copy(pendingControl = null) }
+        _messages.tryEmit(if (event.failed) "会话建立失败" else "会话已结束")
+    }
+
+    private fun handleSessionError(event: RemoteEvent.SessionError) {
+        val pending = _uiState.value.pendingControl ?: return
+        if (event.sessionId != pending.sessionId) return
+        _uiState.update { it.copy(pendingControl = null) }
+        _messages.tryEmit(event.message)
     }
 
     // ── 用户操作 ─────────────────────────────────────────────
@@ -229,12 +276,18 @@ class ShareViewModel(
     fun respondControl(accept: Boolean) {
         val request = _uiState.value.pendingControl ?: return
         viewModelScope.launch {
-            runCatching { repository.respondControl(request.requestId, accept) }
+            runCatching { repository.respondControl(request.sessionId, accept) }
                 .onSuccess {
-                    _uiState.update { it.copy(pendingControl = null) }
+                    val navigate = accept && handled.add("session-started-${request.sessionId}")
+                    _uiState.update {
+                        it.copy(
+                            pendingControl = null,
+                            controlledSessionPeer = if (navigate) request.controller else it.controlledSessionPeer,
+                        )
+                    }
                     if (!accept) _messages.tryEmit("已拒绝控制")
                 }
-                .onFailure { _messages.tryEmit("操作失败，请重试") }
+                .onFailure { error -> _messages.tryEmit(error.message ?: "操作失败，请重试") }
         }
     }
 

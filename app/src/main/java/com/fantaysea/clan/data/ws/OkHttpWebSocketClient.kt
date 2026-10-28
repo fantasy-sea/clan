@@ -75,6 +75,11 @@ class OkHttpWebSocketClient(
         }
     }
 
+    override fun send(text: String): Boolean {
+        val socket = synchronized(lock) { webSocket } ?: return false
+        return socket.send(text)
+    }
+
     override fun stop() {
         synchronized(lock) {
             currentUrl = null

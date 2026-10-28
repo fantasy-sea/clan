@@ -102,7 +102,7 @@ fun ControlHomeScreen() {
             onRetry = vm::retry,
             //打开配对码弹窗
             onOpenPairDialog = vm::openPairDialog,
-            //取消配哦对弹窗
+            //取消配对弹窗
             onPairDialogDismiss = vm::closePairDialog,
             //配对码发生了变化
             onPairCodeChanged = vm::onCodeChanged,
@@ -263,7 +263,7 @@ internal fun ControlHomeScreenContent(
     // 等待对方同意控制
     state.pendingControl?.let { target ->
         WaitingControlOverlay(
-            device = target,
+            device = target.device,
             onCancel = actions.onCancelControl,
         )
     }

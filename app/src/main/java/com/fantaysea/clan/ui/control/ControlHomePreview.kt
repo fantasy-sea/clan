@@ -87,7 +87,7 @@ private fun ControlHomeWaitingPreview() {
     ControlHomePreviewContent(
         state = ControlHomeUiState(
             pageState = DeviceListState.Success(previewDeviceList),
-            pendingControl = previewDeviceList.first(),
+            pendingControl = PendingControl(previewDeviceList.first(), "session_preview"),
         ),
     )
 }
