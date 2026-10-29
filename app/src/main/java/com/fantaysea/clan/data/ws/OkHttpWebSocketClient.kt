@@ -26,6 +26,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * OkHttp WebSocket 实现。
@@ -106,7 +107,13 @@ class OkHttpWebSocketClient(
                 object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: Response) {
                         Log.i(TAG, "connected, sending AUTH")
-                        if (!webSocket.send(WsProtocol.authMessage(token, "auth-${System.currentTimeMillis()}"))) {
+                        if (!webSocket.send(
+                                WsProtocol.authMessage(
+                                    token,
+                                    "auth-${System.currentTimeMillis()}"
+                                )
+                            )
+                        ) {
                             Log.w(TAG, "AUTH frame was not queued")
                         }
                     }
@@ -151,7 +158,11 @@ class OkHttpWebSocketClient(
                         closed.complete(Unit)
                     }
 
-                    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    override fun onFailure(
+                        webSocket: WebSocket,
+                        t: Throwable,
+                        response: Response?
+                    ) {
                         val reason = describeFailure(t, response)
                         Log.w(TAG, "connection failed: $reason")
                         if (_failure.value !is WsFailure.AuthRejected) {
@@ -164,7 +175,7 @@ class OkHttpWebSocketClient(
             )
             synchronized(lock) { webSocket = socket }
 
-            val authenticated = withTimeoutOrNull(AUTH_TIMEOUT_MS) { authResult.await() } ?: false
+            val authenticated = withTimeoutOrNull(AUTH_TIMEOUT_MS.milliseconds) { authResult.await() } ?: false
             if (!authenticated) {
                 socket.cancel()
                 synchronized(lock) { if (webSocket === socket) webSocket = null }
@@ -183,7 +194,7 @@ class OkHttpWebSocketClient(
                 }
                 _state.value = WsState.Reconnecting
                 attempt += 1
-                delay(backoffMillis(attempt))
+                delay(backoffMillis(attempt).milliseconds)
                 continue
             }
 
@@ -195,7 +206,7 @@ class OkHttpWebSocketClient(
             synchronized(lock) { if (webSocket === socket) webSocket = null }
             _state.value = WsState.Reconnecting
             attempt = 1
-            delay(backoffMillis(attempt))
+            delay(backoffMillis(attempt).milliseconds)
         }
     }
 
@@ -204,7 +215,7 @@ class OkHttpWebSocketClient(
         heartbeatJob = scope.launch {
             var sequence = 0
             while (isActive) {
-                delay(HEARTBEAT_INTERVAL_MS)
+                delay(HEARTBEAT_INTERVAL_MS.milliseconds)
                 if (!socket.send(WsProtocol.pingMessage("ping-${++sequence}"))) break
             }
         }

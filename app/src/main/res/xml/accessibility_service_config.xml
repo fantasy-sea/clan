@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  无障碍控制服务的系统配置。
+  开启后共享屏幕页才允许接受控制请求，被控端通过 AccessibilityControlExecutor
+  使用 dispatchGesture / performGlobalAction 执行家人发起的点击、滑动、返回等操作。
+  说明：这是远程协助工具而不是辅助技术，显式声明 isAccessibilityTool=false。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canPerformGestures="true"
+    android:description="@string/accessibility_service_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="100" />

@@ -116,24 +116,32 @@ sealed interface RemoteEvent {
         val accessibility: Boolean,
     ) : RemoteEvent
 
-    /** WebRTC SDP 信令；供后续 WebRtcManager 消费。 */
+    /**
+     * WebRTC 信令事件标记：SDP/ICE 需要在 PeerConnection 就绪前按 sessionId 缓冲，
+     * 由 [com.fantaysea.clan.media.WebRtcManager] 统一消费。
+     */
+    sealed interface Signal : RemoteEvent {
+        val sessionId: String
+    }
+
+    /** WebRTC SDP 信令；由 WebRtcManager 消费。 */
     data class WebRtcOffer(
-        val sessionId: String,
+        override val sessionId: String,
         val requestId: String? = null,
         val sdp: String,
-    ) : RemoteEvent
+    ) : Signal
 
     data class WebRtcAnswer(
-        val sessionId: String,
+        override val sessionId: String,
         val requestId: String? = null,
         val sdp: String,
-    ) : RemoteEvent
+    ) : Signal
 
     data class IceCandidateEvent(
-        val sessionId: String,
+        override val sessionId: String,
         val requestId: String? = null,
         val candidate: IceCandidate,
-    ) : RemoteEvent
+    ) : Signal
 
     /** 服务端 ERROR 帧：控制/信令被拒绝或限流时由 UI 提示。 */
     data class SessionError(

@@ -8,14 +8,17 @@ import com.fantaysea.clan.data.model.IceCandidate
 import com.fantaysea.clan.data.model.LocalPermissions
 import com.fantaysea.clan.data.model.PairingCode
 import com.fantaysea.clan.data.model.SessionInfo
+import com.fantaysea.clan.data.model.SessionStatus
 import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.DeviceRegistration
 import com.fantaysea.clan.data.repository.PairedDevice
 import com.fantaysea.clan.data.repository.RemoteEvent
+import com.fantaysea.clan.service.AccessibilitySettingsTarget
 import com.fantaysea.clan.ui.control.ControlHomeViewModel
 import com.fantaysea.clan.ui.control.DeviceListState
 import com.fantaysea.clan.ui.control.PairPhase
+import com.fantaysea.clan.ui.share.AccessibilityGuideStage
 import com.fantaysea.clan.ui.share.SharePermissionState
 import com.fantaysea.clan.ui.share.ShareViewModel
 import kotlinx.coroutines.Dispatchers
@@ -138,6 +141,178 @@ class BackendCapabilityUiTest {
         assertEquals("123456", viewModel.uiState.value.code)
         assertEquals(SharePermissionState.Unknown, viewModel.uiState.value.permissionState)
         assertEquals(1, repository.pairingCodeCount)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `share view model refuses control until both permissions are granted`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(
+                BackendCapability.DEVICE_IDENTITY,
+                BackendCapability.PAIRING,
+                BackendCapability.CONTROL_SESSIONS,
+            ),
+        )
+        val viewModel = ShareViewModel(repository)
+        runCurrent()
+        val controller = Device("dev_controller", "爸爸的手机", "ANDROID", "Pixel 8", "16", null, null)
+        repository.emit(RemoteEvent.ControlRequest("session_1", controller))
+        runCurrent()
+        assertEquals("session_1", viewModel.uiState.value.pendingControl?.sessionId)
+
+        // 只有屏幕共享：仍不接受控制请求，也不调用服务端。
+        viewModel.onPermissionResult(granted = true)
+        viewModel.respondControl(accept = true)
+        runCurrent()
+        assertTrue(repository.respondControlCalls.isEmpty())
+        assertEquals("session_1", viewModel.uiState.value.pendingControl?.sessionId)
+
+        // 无障碍也授予后即可接受。
+        viewModel.onAccessibilityResult(granted = true)
+        viewModel.respondControl(accept = true)
+        runCurrent()
+        assertEquals(listOf("session_1" to true), repository.respondControlCalls)
+        assertNull(viewModel.uiState.value.pendingControl)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `share view model reports accessibility together with capture`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.PAIRING),
+        )
+        val viewModel = ShareViewModel(repository)
+
+        viewModel.onAccessibilityResult(granted = true)
+        viewModel.onPermissionResult(granted = true)
+        assertEquals(LocalPermissions(screenCapture = true, accessibility = true), repository.localPermissions.value)
+        assertTrue(viewModel.uiState.value.allPermissionsGranted)
+
+        // 屏幕共享结果变化不应覆盖已开启的无障碍权限。
+        viewModel.onPermissionResult(granted = false)
+        assertEquals(LocalPermissions(screenCapture = false, accessibility = true), repository.localPermissions.value)
+        assertFalse(viewModel.uiState.value.allPermissionsGranted)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `share view model prompts for permissions and guides accessibility after capture`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.PAIRING),
+        )
+        val viewModel = ShareViewModel(repository)
+        assertTrue(viewModel.uiState.value.permissionPromptVisible)
+
+        // 「稍后」只关闭本次提示；授予屏幕共享后再次提示，引导开启无障碍。
+        viewModel.dismissPermissionPrompt()
+        assertFalse(viewModel.uiState.value.permissionPromptVisible)
+        viewModel.onPermissionResult(granted = true)
+        assertTrue(viewModel.uiState.value.permissionPromptVisible)
+
+        viewModel.onAccessibilityResult(granted = true)
+        assertFalse(viewModel.uiState.value.permissionPromptVisible)
+        assertTrue(viewModel.uiState.value.allPermissionsGranted)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `share view model skips prompt when both permissions are already granted`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.PAIRING),
+        )
+        repository.updateLocalPermissions(screenCapture = true, accessibility = false)
+        val viewModel = ShareViewModel(repository, initialAccessibilityEnabled = true)
+
+        assertFalse(viewModel.uiState.value.permissionPromptVisible)
+        assertTrue(viewModel.uiState.value.allPermissionsGranted)
+        assertEquals(LocalPermissions(screenCapture = true, accessibility = true), repository.localPermissions.value)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `opening accessibility guide replaces the entry prompt and records the settings target`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.PAIRING),
+        )
+        val viewModel = ShareViewModel(repository)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.permissionPromptVisible)
+
+        viewModel.openAccessibilityGuide()
+
+        val intro = viewModel.uiState.value.accessibilityGuide
+        assertTrue(intro.visible)
+        assertEquals(AccessibilityGuideStage.Intro, intro.stage)
+        assertNull(intro.target)
+        assertFalse(viewModel.uiState.value.permissionPromptVisible)
+
+        viewModel.onAccessibilitySettingsOpened(AccessibilitySettingsTarget.ServiceDetail)
+
+        val waiting = viewModel.uiState.value.accessibilityGuide
+        assertEquals(AccessibilityGuideStage.Waiting, waiting.stage)
+        assertEquals(AccessibilitySettingsTarget.ServiceDetail, waiting.target)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `returning without enabling keeps waiting until the grace period ends`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.PAIRING),
+        )
+        val viewModel = ShareViewModel(repository)
+        runCurrent()
+        viewModel.openAccessibilityGuide()
+        viewModel.onAccessibilitySettingsOpened(AccessibilitySettingsTarget.AccessibilityList)
+
+        // 刚回到前台时状态可能还没同步：初步检测失败不应立刻判定为未开启。
+        viewModel.onAccessibilityResult(granted = false)
+        assertEquals(AccessibilityGuideStage.Waiting, viewModel.uiState.value.accessibilityGuide.stage)
+
+        viewModel.onAccessibilitySetupReturned(granted = false)
+
+        assertEquals(AccessibilityGuideStage.Missing, viewModel.uiState.value.accessibilityGuide.stage)
+        assertFalse(viewModel.uiState.value.accessibilityGranted)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `enabling accessibility finishes the guide and unlocks control`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(
+                BackendCapability.DEVICE_IDENTITY,
+                BackendCapability.PAIRING,
+                BackendCapability.CONTROL_SESSIONS,
+            ),
+        )
+        val viewModel = ShareViewModel(repository)
+        runCurrent()
+        viewModel.onPermissionResult(granted = true)
+        viewModel.openAccessibilityGuide()
+        viewModel.onAccessibilitySettingsOpened(AccessibilitySettingsTarget.ServiceDetail)
+
+        viewModel.onAccessibilitySetupReturned(granted = true)
+
+        val guide = viewModel.uiState.value.accessibilityGuide
+        assertTrue(guide.visible)
+        assertEquals(AccessibilityGuideStage.Enabled, guide.stage)
+        assertTrue(viewModel.uiState.value.allPermissionsGranted)
+        assertFalse(viewModel.uiState.value.permissionPromptVisible)
+        assertEquals(LocalPermissions(screenCapture = true, accessibility = true), repository.localPermissions.value)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `dismissing the accessibility guide hides it`() = runTest(dispatcher) {
+        val repository = TrackingRepository(
+            capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.PAIRING),
+        )
+        val viewModel = ShareViewModel(repository)
+        runCurrent()
+        viewModel.openAccessibilityGuide()
+
+        viewModel.dismissAccessibilityGuide()
+
+        assertFalse(viewModel.uiState.value.accessibilityGuide.visible)
         viewModel.viewModelScope.cancel()
     }
 
@@ -318,6 +493,7 @@ class BackendCapabilityUiTest {
         val canceledRequestIds = mutableListOf<String>()
         val unboundDeviceIds = mutableListOf<String>()
         val renamedDevices = mutableListOf<Pair<String, String>>()
+        val respondControlCalls = mutableListOf<Pair<String, Boolean>>()
 
         suspend fun emit(event: RemoteEvent) = eventFlow.emit(event)
 
@@ -339,14 +515,24 @@ class BackendCapabilityUiTest {
             canceledRequestIds += requestId
         }
         override suspend fun sendControlRequest(device: Device): SessionInfo = error("not used")
-        override suspend fun respondControl(sessionId: String, accept: Boolean): SessionInfo = error("not used")
+        override suspend fun respondControl(sessionId: String, accept: Boolean): SessionInfo {
+            respondControlCalls += sessionId to accept
+            return SessionInfo(
+                sessionId = sessionId,
+                controllerDeviceId = "dev_controller",
+                controlledDeviceId = "dev_self",
+                status = SessionStatus.CONNECTING,
+                expiresAt = null,
+                createdAt = null,
+            )
+        }
         override suspend fun endSession(sessionId: String) = Unit
         override suspend fun sendControl(sessionId: String, command: ControlCommand): String = "ctl_test"
         override suspend fun sendControlResult(
             sessionId: String,
             requestId: String,
             ok: Boolean,
-            reason: String? = null,
+            reason: String?,
         ) = Unit
 
         override suspend fun sendPermissionStatus(

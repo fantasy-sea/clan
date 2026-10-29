@@ -9,6 +9,7 @@ import com.fantaysea.clan.data.model.SessionStatus
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.RemoteEvent
+import com.fantaysea.clan.service.AccessibilitySettingsTarget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,8 +27,26 @@ import kotlinx.coroutines.launch
 /** 屏幕共享授权状态 */
 enum class SharePermissionState { Unknown, Granted, Denied }
 
+/** 无障碍分步引导的阶段：介绍 → 等待系统设置 → 未开启排障 / 已开启。 */
+enum class AccessibilityGuideStage { Intro, Waiting, Missing, Enabled }
+
+/** 无障碍分步引导状态。 */
+data class AccessibilityGuideState(
+    val visible: Boolean = false,
+    val stage: AccessibilityGuideStage = AccessibilityGuideStage.Intro,
+    /** 本次跳转实际落点，决定步骤 2 的文案；为 null 时用通用文案。 */
+    val target: AccessibilitySettingsTarget? = null,
+)
+
 data class ShareUiState(
+    /** 屏幕捕获(MediaProjection)授权状态。 */
     val permissionState: SharePermissionState = SharePermissionState.Unknown,
+    /** 无障碍控制服务是否已在系统设置中开启；与屏幕捕获同时具备才允许接受控制请求。 */
+    val accessibilityGranted: Boolean = false,
+    /** 入口授权提示是否仍展示；用户点「稍后」或两项权限补齐后关闭。 */
+    val permissionPromptVisible: Boolean = false,
+    /** 无障碍分步引导（全屏）；与入口提示、控制请求弹窗互斥。 */
+    val accessibilityGuide: AccessibilityGuideState = AccessibilityGuideState(),
     val deviceName: String = "",
     val model: String = "",
     val platform: String = "",
@@ -45,21 +64,33 @@ data class ShareUiState(
     val pendingControl: RemoteEvent.ControlRequest? = null,
     /** 会话建立后, 需要进入被控页的控制方(非空即导航) */
     val controlledSessionPeer: Device? = null,
-)
+) {
+    /** 只有屏幕捕获与无障碍控制同时具备，才允许接受控制端的控制请求。 */
+    val allPermissionsGranted: Boolean
+        get() = permissionState == SharePermissionState.Granted && accessibilityGranted
+}
 
 class ShareViewModel(
     private val repository: ClanRepository,
+    initialAccessibilityEnabled: Boolean = false,
 ) : ViewModel() {
+
+    private val initialScreenCaptureGranted = repository.localPermissions.value.screenCapture
+    private val pairingEnabled = BackendCapability.PAIRING in repository.capabilities
 
     private val _uiState = MutableStateFlow(
         ShareUiState(
             // 进程内已授权过时保持“投屏就绪”，避免重新进入页面又显示未授权。
-            permissionState = if (repository.localPermissions.value.screenCapture) {
+            permissionState = if (initialScreenCaptureGranted) {
                 SharePermissionState.Granted
             } else {
                 SharePermissionState.Unknown
             },
-            pairingAvailable = BackendCapability.PAIRING in repository.capabilities,
+            accessibilityGranted = initialAccessibilityEnabled,
+            // 进入页面时若两项权限未齐先提示一次；配对不可用时页面本身不可操作，不提示。
+            permissionPromptVisible = pairingEnabled &&
+                !(initialScreenCaptureGranted && initialAccessibilityEnabled),
+            pairingAvailable = pairingEnabled,
             controlAvailable = BackendCapability.CONTROL_SESSIONS in repository.capabilities,
         ),
     )
@@ -73,6 +104,11 @@ class ShareViewModel(
     private var codeFailureNotified = false
 
     init {
+        // 进入页面即把真实权限（屏幕捕获 + 无障碍）同步给会话层，供 PERMISSION_STATUS 使用。
+        repository.updateLocalPermissions(
+            screenCapture = initialScreenCaptureGranted,
+            accessibility = initialAccessibilityEnabled,
+        )
         viewModelScope.launch {
             repository.self.filterNotNull().collect { self ->
                 _uiState.update {
@@ -108,10 +144,97 @@ class ShareViewModel(
     fun onPermissionResult(granted: Boolean) {
         if (!_uiState.value.pairingAvailable) return
         _uiState.update {
-            it.copy(permissionState = if (granted) SharePermissionState.Granted else SharePermissionState.Denied)
+            it.copy(
+                permissionState = if (granted) SharePermissionState.Granted else SharePermissionState.Denied,
+                // 屏幕共享已授予但无障碍未开启时，入口提示切换为第二步引导。
+                permissionPromptVisible = if (granted) !it.accessibilityGranted else it.permissionPromptVisible,
+            )
         }
-        // 真正的屏幕捕获/无障碍能力仍未接入；先把系统授权结果同步给会话层。
-        repository.updateLocalPermissions(screenCapture = granted, accessibility = false)
+        // 无障碍状态保留，避免只更新屏幕捕获时把已开启的无障碍权限覆盖成 false。
+        repository.updateLocalPermissions(
+            screenCapture = granted,
+            accessibility = _uiState.value.accessibilityGranted,
+        )
+    }
+
+    /** 无障碍控制权限结果；系统设置没有“拒绝”回调，未开启时保持 false。 */
+    fun onAccessibilityResult(granted: Boolean) {
+        _uiState.update {
+            val guide = it.accessibilityGuide
+            it.copy(
+                accessibilityGranted = granted,
+                // 两项权限齐全后不再展示入口提示。
+                permissionPromptVisible = if (granted && it.permissionState == SharePermissionState.Granted) {
+                    false
+                } else {
+                    it.permissionPromptVisible
+                },
+                // 引导可见时：已开启直接切成功态；未开启保持当前阶段，由返回检测的宽限逻辑判定。
+                accessibilityGuide = if (guide.visible && granted) {
+                    guide.copy(stage = AccessibilityGuideStage.Enabled)
+                } else {
+                    guide
+                },
+            )
+        }
+        repository.updateLocalPermissions(
+            screenCapture = _uiState.value.permissionState == SharePermissionState.Granted,
+            accessibility = granted,
+        )
+    }
+
+    /** 打开无障碍分步引导：优先弹出「3 步说明」，而不是直接跳系统设置。 */
+    fun openAccessibilityGuide() {
+        val state = _uiState.value
+        if (!state.pairingAvailable || state.accessibilityGranted) return
+        _uiState.update {
+            it.copy(
+                // 引导与入口提示不叠加。
+                permissionPromptVisible = false,
+                accessibilityGuide = AccessibilityGuideState(visible = true),
+            )
+        }
+    }
+
+    /** 系统设置已打开，等待用户操作后返回检测。 */
+    fun onAccessibilitySettingsOpened(target: AccessibilitySettingsTarget) {
+        _uiState.update {
+            if (!it.accessibilityGuide.visible) return@update it
+            it.copy(
+                accessibilityGuide = it.accessibilityGuide.copy(
+                    stage = AccessibilityGuideStage.Waiting,
+                    target = target,
+                ),
+            )
+        }
+    }
+
+    /** 三个设置入口都打不开：留在介绍页，提示用户手动进入系统设置。 */
+    fun onAccessibilitySettingsLaunchFailed() {
+        _uiState.update {
+            it.copy(accessibilityGuide = it.accessibilityGuide.copy(stage = AccessibilityGuideStage.Intro))
+        }
+        _messages.tryEmit("打不开系统设置，请手动打开「设置 → 无障碍」")
+    }
+
+    /** 从系统设置返回（或用户点「检测一下」）后的落定：开启则完成，未开启进入排障。 */
+    fun onAccessibilitySetupReturned(granted: Boolean) {
+        onAccessibilityResult(granted)
+        if (granted) return
+        _uiState.update {
+            if (!it.accessibilityGuide.visible) return@update it
+            it.copy(accessibilityGuide = it.accessibilityGuide.copy(stage = AccessibilityGuideStage.Missing))
+        }
+    }
+
+    /** 关闭无障碍引导（「暂时不用」或成功提示自动关闭）。 */
+    fun dismissAccessibilityGuide() {
+        _uiState.update { it.copy(accessibilityGuide = AccessibilityGuideState()) }
+    }
+
+    /** 用户选择「稍后」，本次进入页面不再展示授权提示。 */
+    fun dismissPermissionPrompt() {
+        _uiState.update { it.copy(permissionPromptVisible = false) }
     }
 
     private fun startPairingCodeSession() {
@@ -199,7 +322,8 @@ class ShareViewModel(
     private fun handleMatchRequest(event: RemoteEvent.MatchRequest) {
         if (!handled.add("request-${event.requestId}")) return
         if (_uiState.value.pendingMatch == null) {
-            _uiState.update { it.copy(pendingMatch = event) }
+            // 配对确认优先于入口授权提示，避免两个弹窗叠加。
+            _uiState.update { it.copy(pendingMatch = event, permissionPromptVisible = false) }
         }
     }
 
@@ -224,7 +348,8 @@ class ShareViewModel(
     private fun handleControlRequest(event: RemoteEvent.ControlRequest) {
         if (!handled.add("control-${event.sessionId}")) return
         if (_uiState.value.pendingControl == null) {
-            _uiState.update { it.copy(pendingControl = event) }
+            // 控制确认优先于入口授权提示，避免两个弹窗叠加。
+            _uiState.update { it.copy(pendingControl = event, permissionPromptVisible = false) }
         }
     }
 
@@ -275,6 +400,11 @@ class ShareViewModel(
 
     fun respondControl(accept: Boolean) {
         val request = _uiState.value.pendingControl ?: return
+        // 两项系统权限缺一不可：没有屏幕共享/无障碍控制时不能接受控制请求。
+        if (accept && !_uiState.value.allPermissionsGranted) {
+            _messages.tryEmit("请先授予屏幕共享和无障碍控制权限")
+            return
+        }
         viewModelScope.launch {
             runCatching { repository.respondControl(request.sessionId, accept) }
                 .onSuccess {

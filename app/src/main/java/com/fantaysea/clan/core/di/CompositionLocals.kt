@@ -6,6 +6,8 @@ import com.fantaysea.clan.core.navigation.NoOpNavigator
 import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.ClanRepository
+import com.fantaysea.clan.media.ScreenCaptureManager
+import com.fantaysea.clan.media.WebRtcManager
 
 //staticCompositionLocalOf 用于不常变化的、全局需要使用的变量（值发生变化时会追踪重组整个 Provider 的 content 范围）
 //顶层变量用于声明不会变化、全局需要使用的变量
@@ -16,6 +18,16 @@ val LocalAppPreferences = staticCompositionLocalOf<AppPreferences> {
 }
 val LocalClanRepository = staticCompositionLocalOf<ClanRepository> {
     error("无法使用")
+}
+
+/** 屏幕捕获授权存储：ShareScreen 与 ControlledSessionScreen 共享同一份一次性令牌。 */
+val LocalScreenCaptureManager = staticCompositionLocalOf<ScreenCaptureManager> {
+    error("未提供屏幕捕获管理器")
+}
+
+/** 应用级 WebRTC 媒体管理器：控制端渲染、被控端采集都通过它。 */
+val LocalWebRtcManager = staticCompositionLocalOf<WebRtcManager> {
+    error("未提供 WebRTC 管理器")
 }
 
 /**
