@@ -101,7 +101,7 @@ interface ClanRepository {
     /** 被控端回传投屏/无障碍权限状态。 */
     suspend fun sendPermissionStatus(sessionId: String, screenCapture: Boolean, accessibility: Boolean)
 
-    /** WebRTC 连通后发送；真实媒体接入前由会话页作为占位调用。 */
+    /** WebRTC 连通后由 [com.fantaysea.clan.media.WebRtcManager] 发送；服务端幂等。 */
     suspend fun sendSessionConnected(sessionId: String)
 
     // WebRTC 信令；媒体层接入后由 WebRtcManager 调用。

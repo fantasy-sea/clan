@@ -10,15 +10,22 @@ import com.fantaysea.clan.ui.theme.ClanTheme
 
 class MainActivity : ComponentActivity() {
     private val appPreferences by lazy { AppPreferences(applicationContext) }
+    private val clanApplication: ClanApplication
+        get() = application as ClanApplication
     private val repository: ClanRepository
-        get() = (application as ClanApplication).repository
+        get() = clanApplication.repository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             ClanTheme {
-                App(appPreferences, repository)
+                App(
+                    appPreferences = appPreferences,
+                    repository = repository,
+                    screenCaptureManager = clanApplication.screenCaptureManager,
+                    webRtcManager = clanApplication.webRtcManager,
+                )
             }
         }
     }

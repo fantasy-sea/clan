@@ -416,7 +416,7 @@ class RealClanRepository(
         sessionId: String,
         requestId: String,
         ok: Boolean,
-        reason: String? = null,
+        reason: String?,
     ) {
         sendRealtime(WsProtocol.controlResultMessage(sessionId, requestId, ok, reason))
     }

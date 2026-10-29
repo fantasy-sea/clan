@@ -3,72 +3,111 @@ package com.fantaysea.clan.media
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/** 屏幕捕获授权的进程内状态。 */
+sealed interface ScreenCaptureState {
+    /** 没有可消费的授权令牌（未授权、已消费或已被系统撤销）。 */
+    data object NoConsent : ScreenCaptureState
+
+    /** 已拿到系统授权，令牌待消费。 */
+    data object Ready : ScreenCaptureState
+
+    /** 令牌已被消费，前台服务与 MediaProjection 正在建立。 */
+    data object Starting : ScreenCaptureState
+
+    /** 采集正在运行。 */
+    data object Capturing : ScreenCaptureState
+
+    data class Error(val message: String) : ScreenCaptureState
+}
+
+/** 系统授权回调里的一次性令牌。Android 14+ 每个令牌只能创建一次 MediaProjection。 */
+data class ScreenCaptureConsent(
+    val resultCode: Int,
+    val resultData: Intent,
+)
 
 /**
- * 屏幕捕获授权与投影管理(预留骨架)。
+ * 进程级屏幕捕获授权存储。
  *
- * MediaProjection 不是普通运行时权限: 每次调用 [createCaptureIntent] 都会弹系统授权框,
- * 回调里的 resultData 是「一次性」令牌, 必须在授权后尽快交给前台服务消费, 否则失效。
+ * MediaProjection 不是普通运行时权限：
+ * - 每次 `createScreenCaptureIntent()` 都会弹系统授权框；
+ * - 回调里的 [ScreenCaptureConsent.resultData] 是单次令牌，必须先由 `mediaProjection` 类型
+ *   前台服务开始前台、再调用 `getMediaProjection()`（Android 14+）；
+ * - 令牌消费后不能复用，因此这里只保存「待消费」的一次性授权，采集停止/失败即清空。
  *
- * 当前阶段:
- * - 只记录「本进程内已授权」状态以驱动 UI 流程(共享屏幕页的授权门控);
- * - 真正开始捕获(VirtualDisplay + ImageReader/Surface)由 [com.fantaysea.clan.service.ScreenCaptureService]
- *   消费 [resultData], 后续与 WebRTC 视频轨道对接, 此处留 TODO。
- *
- * 注意: 进程被杀后 [isGranted] 复位; Android 14+ 每次会话系统都会重新确认授权。
+ * 该实例由 `ClanApplication` 持有，ShareScreen 与 ControlledSessionScreen 共享；页面切换或
+ * Activity 重建不会丢失授权状态。
  */
-class ScreenCaptureManager(private val context: Context) {
+class ScreenCaptureManager(context: Context) {
 
-    private val projectionManager: MediaProjectionManager =
-        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    private val appContext = context.applicationContext
+    private val projectionManager =
+        appContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
-    /** 本进程内是否已获得授权 */
-    var isGranted: Boolean = false
-        private set
+    private val lock = Any()
+    private var pendingConsent: ScreenCaptureConsent? = null
+    private val _state = MutableStateFlow<ScreenCaptureState>(ScreenCaptureState.NoConsent)
+    val state: StateFlow<ScreenCaptureState> = _state.asStateFlow()
 
-    var resultCode: Int = Activity.RESULT_CANCELED
-        private set
+    /** UI 门控含义：有可用授权或正在采集。注意这不代表已经拿到 MediaProjection 实例。 */
+    val isAuthorized: Boolean
+        get() = when (_state.value) {
+            ScreenCaptureState.Ready,
+            ScreenCaptureState.Starting,
+            ScreenCaptureState.Capturing -> true
 
-    /** 系统返回的授权令牌(一次性, 需尽快消费) */
-    var resultData: Intent? = null
-        private set
+            else -> false
+        }
 
-    /** 已建立的投影(真实捕获开始后非空) */
-    var mediaProjection: MediaProjection? = null
-        private set
-
-    /** 生成系统屏幕捕获授权 Intent */
     fun createCaptureIntent(): Intent = projectionManager.createScreenCaptureIntent()
 
-    /** 授权回调结果处理 */
+    /** 保存系统授权结果；取消授权会清空旧令牌。 */
     fun onConsent(resultCode: Int, data: Intent?) {
-        if (resultCode == Activity.RESULT_OK && data != null) {
-            this.resultCode = resultCode
-            this.resultData = data
-            this.isGranted = true
-        } else {
-            this.isGranted = false
-            this.resultData = null
+        synchronized(lock) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                pendingConsent = ScreenCaptureConsent(resultCode, data)
+                _state.value = ScreenCaptureState.Ready
+            } else {
+                pendingConsent = null
+                _state.value = ScreenCaptureState.NoConsent
+            }
         }
     }
 
+    fun hasPendingConsent(): Boolean = synchronized(lock) { pendingConsent != null }
+
     /**
-     * 开始捕获。
-     * TODO(真实实现): 启动 [com.fantaysea.clan.service.ScreenCaptureService],
-     *  传入 resultData/resultCode, 由服务调用 projectionManager.getMediaProjection(...)
-     *  并创建 VirtualDisplay 输出到 Surface。
+     * 消费一次性授权令牌。
+     * 只有 [ScreenCaptureState.Ready] 才可能返回非空；返回后状态推进到 Starting。
      */
-    fun startCapture(onStarted: (MediaProjection?) -> Unit = {}) {
-        onStarted(mediaProjection)
+    fun takeConsent(): ScreenCaptureConsent? = synchronized(lock) {
+        val consent = pendingConsent ?: return@synchronized null
+        pendingConsent = null
+        _state.value = ScreenCaptureState.Starting
+        consent
     }
 
-    /** 停止捕获并释放投影。 */
-    fun stopCapture() {
-        mediaProjection?.stop()
-        mediaProjection = null
-        isGranted = false
-        resultData = null
+    fun markCapturing() {
+        synchronized(lock) { _state.value = ScreenCaptureState.Capturing }
+    }
+
+    /** 采集停止：令牌已消费，必须重新授权；同时结束当前授权状态。 */
+    fun markStopped() {
+        synchronized(lock) {
+            pendingConsent = null
+            _state.value = ScreenCaptureState.NoConsent
+        }
+    }
+
+    fun markError(message: String) {
+        synchronized(lock) {
+            pendingConsent = null
+            _state.value = ScreenCaptureState.Error(message)
+        }
     }
 }

@@ -7,6 +7,10 @@
 
     <!-- 远程配对/控制: WebSocket 信令 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- WebRTC: 网络切换监听(ICE 候选与网络质量) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- WebRTC 默认音频模块初始化需要；本应用只推视频，不采集/播放音频 -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- 屏幕捕获: 前台服务 + MediaProjection 类型 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -33,11 +37,25 @@
             </intent-filter>
         </activity>
 
-        <!-- 屏幕捕获前台服务(预留): 消费 MediaProjection 授权令牌, 供 WebRTC 编码发送 -->
+        <!-- 屏幕捕获前台服务: 先 startForeground，再消费 MediaProjection 授权令牌供 WebRTC 编码发送 -->
         <service
             android:name=".service.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- 无障碍控制服务: 权限载体, 用户在系统设置中开启后才允许接受控制请求 -->
+        <service
+            android:name=".service.ClanAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
     </application>
 
 </manifest>

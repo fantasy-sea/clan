@@ -197,8 +197,9 @@ internal fun NotificationPermissionPage() {
 /**
  * MediaProjection 授权示例(屏幕捕获 = 远程控制的核心能力)。
  *
- * 注意: 它不是普通运行时权限, 而是通过系统弹窗授权, 回调结果是一个 Intent;
- * 真正的投屏能力需要后续的 MediaProjection 前台服务来消费这个 Intent(服务尚未实现)。
+ * 注意: 它不是普通运行时权限, 而是通过系统弹窗授权, 回调结果是一个一次性 Intent;
+ * 该页当前未启用。正式流程由「共享屏幕」页通过 ScreenCaptureManager 授权，
+ * 会话建立后由 ScreenCaptureService + WebRtcManager 消费。
  */
 @Composable
 internal fun MediaProjectionPermissionPage() {

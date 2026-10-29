@@ -23,11 +23,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.fantaysea.clan.core.di.LocalAppPreferences
 import com.fantaysea.clan.core.di.LocalClanRepository
+import com.fantaysea.clan.core.di.LocalScreenCaptureManager
 import com.fantaysea.clan.core.di.LocalSelfDevice
+import com.fantaysea.clan.core.di.LocalWebRtcManager
 import com.fantaysea.clan.core.navigation.AppNavigation
 import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.DeviceRegistration
+import com.fantaysea.clan.media.ScreenCaptureManager
+import com.fantaysea.clan.media.WebRtcManager
 
 private sealed interface IdentityState {
     data object Loading : IdentityState
@@ -36,7 +40,12 @@ private sealed interface IdentityState {
 }
 
 @Composable
-fun App(appPreferences: AppPreferences, repository: ClanRepository) {
+fun App(
+    appPreferences: AppPreferences,
+    repository: ClanRepository,
+    screenCaptureManager: ScreenCaptureManager,
+    webRtcManager: WebRtcManager,
+) {
     //连接服务端尝试次数
     var attempt by remember { mutableIntStateOf(0) }
     var identityState by remember { mutableStateOf<IdentityState>(IdentityState.Loading) }
@@ -70,6 +79,8 @@ fun App(appPreferences: AppPreferences, repository: ClanRepository) {
                 LocalAppPreferences provides appPreferences,
                 LocalClanRepository provides repository,
                 LocalSelfDevice provides selfDevice,
+                LocalScreenCaptureManager provides screenCaptureManager,
+                LocalWebRtcManager provides webRtcManager,
             ) {
                 AppNavigation()
             }

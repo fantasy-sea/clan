@@ -142,8 +142,8 @@ object WsEventMapper {
             val payload = frame.payload ?: return null
             RemoteEvent.PermissionStatus(
                 sessionId = sessionId,
-                screenCapture = payload.boolean("screenCapture") ?: return null,
-                accessibility = payload.boolean("accessibility") ?: return null,
+                screenCapture = payload.boolean("screenCapture") ?: false,
+                accessibility = payload.boolean("accessibility") ?: false,
             )
         }
 

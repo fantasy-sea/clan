@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">clan</string>
+
+    <!-- 无障碍控制服务：系统设置中的名称与用途说明。
+         名称里带上安装名 clan，方便用户把系统设置项和桌面图标对上号；引导页引用同一个字符串。 -->
+    <string name="accessibility_service_label">家助（clan）无障碍控制</string>
+    <string name="accessibility_service_description">用于在远程协助时执行家人发起的点击、滑动、返回等操作。仅在你同意共享屏幕并接受控制后生效，可随时在系统设置中关闭。</string>
+
+    <!-- 屏幕共享前台服务通知 -->
+    <string name="screen_capture_channel_name">屏幕共享</string>
+    <string name="screen_capture_notification_title">正在共享屏幕</string>
+    <string name="screen_capture_notification_text">家助正在将本机画面发送给已配对的设备</string>
 </resources>
