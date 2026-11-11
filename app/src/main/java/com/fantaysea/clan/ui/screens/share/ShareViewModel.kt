@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.share
+package com.fantaysea.clan.ui.screens.share
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /** 屏幕共享授权状态 */
 enum class SharePermissionState { Unknown, Granted, Denied }
@@ -245,7 +246,7 @@ class ShareViewModel(
             var retryDelay = CODE_RETRY_DELAY_MS
             while (isActive) {
                 if (!refreshPairingCode()) {
-                    delay(retryDelay)
+                    delay(retryDelay.milliseconds)
                     retryDelay = (retryDelay * 2).coerceAtMost(CODE_RETRY_MAX_DELAY_MS)
                     continue
                 }
@@ -254,7 +255,7 @@ class ShareViewModel(
                     val remaining = PairingCodeGenerator.remainingMillis(_uiState.value.expiresAt)
                     if (remaining <= 0) break
                     _uiState.update { it.copy(remainingMillis = remaining) }
-                    delay(200)
+                    delay(200.milliseconds)
                 }
             }
         }
@@ -427,7 +428,6 @@ class ShareViewModel(
 
     override fun onCleared() {
         codeJob?.cancel()
-        super.onCleared()
     }
 
     private companion object {

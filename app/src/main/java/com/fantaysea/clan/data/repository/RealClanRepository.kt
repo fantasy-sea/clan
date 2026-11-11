@@ -2,6 +2,7 @@ package com.fantaysea.clan.data.repository
 
 import com.fantaysea.clan.data.DeviceCredentialStore
 import com.fantaysea.clan.data.DeviceCredentials
+import com.fantaysea.clan.data.DeviceIdentifiers
 import com.fantaysea.clan.data.model.ActiveSession
 import com.fantaysea.clan.data.model.ControlCommand
 import com.fantaysea.clan.data.model.Device
@@ -108,8 +109,24 @@ class RealClanRepository(
                 startRealtime()
                 return@withLock cached
             }
-            //从本机存储中读取是否有设备凭证，没有则进行注册流程
-            var credentials = credentialStore.load() ?: register(registration)
+            val identifiers = registration.identifiers
+            //从本机存储中读取是否有设备凭证，没有则进行注册流程。
+            //已有凭据时即使本次读不到标识也允许继续用 /me 启动；只有真正注册时才强制要求标识。
+            val cachedCredentials = credentialStore.load()
+            if (cachedCredentials == null && identifiers.isEmpty()) {
+                throw ClanApiException(null, null, "无法读取设备标识，无法完成注册")
+            }
+            var credentials = cachedCredentials ?: register(registration)
+            // 老版本只上报过 ANDROID_ID。若升级后第一次拿到 OAID，再注册一次把它补挂到
+            // 同一档案；只在 ANDROID_ID 可用于匹配时才尝试，避免 OAID 重置后误建新档案。
+            if (needsOaidEnrichment(credentials, identifiers)) {
+                credentials = try {
+                    register(registration)
+                } catch (_: ClanServiceException) {
+                    // 补挂是 best-effort：429/网络/40006 都不阻塞已有凭证继续使用。
+                    credentials
+                }
+            }
             val device = try {
                 //拿到设备凭证后获取当前设备信息
                 loadCurrentDevice(credentials.deviceToken)
@@ -139,24 +156,60 @@ class RealClanRepository(
             device
         }
 
+    /**
+     * 判断是否需要为了补挂 OAID 再做一次注册。
+     *
+     * 只在“当前 OAID 非空且与上次上报不同、且当前 ANDROID_ID 可用于安全匹配”时返回 true：
+     * - ANDROID_ID 为空时，注册只能靠 OAID 命中；OAID 若已重置，服务端会新建档案。
+     * - ANDROID_ID 已变化时，同样不能保证命中旧档案，宁可保留旧凭证。
+     */
+    private fun needsOaidEnrichment(
+        credentials: DeviceCredentials,
+        identifiers: DeviceIdentifiers,
+    ): Boolean {
+        val oaid = identifiers.oaidFingerprint ?: return false
+        if (oaid == credentials.reportedOaidFingerprint) return false
+        val androidId = identifiers.androidIdFingerprint ?: return false
+        return credentials.reportedAndroidIdFingerprint == null ||
+            credentials.reportedAndroidIdFingerprint == androidId
+    }
+
     private suspend fun register(registration: DeviceRegistration): DeviceCredentials {
+        // 已有凭据时不会走到这里；只有真正需要注册时，缺少设备标识才是错误。
+        val identifiers = registration.identifiers
+        if (identifiers.isEmpty()) {
+            throw ClanApiException(null, null, "无法读取设备标识，无法完成注册")
+        }
         //发起设备注册请求
-        val response = safeApiCall {
-            api.registerDevice(
-                RegisterDeviceRequest(
-                    deviceName = registration.deviceName,
-                    platform = "ANDROID",
-                    model = registration.model,
-                    androidVersion = registration.androidVersion,
+        val response = try {
+            safeApiCall {
+                api.registerDevice(
+                    RegisterDeviceRequest(
+                        deviceName = registration.deviceName,
+                        platform = "ANDROID",
+                        model = registration.model,
+                        androidVersion = registration.androidVersion,
+                        oaidFingerprint = identifiers.oaidFingerprint,
+                        androidIdFingerprint = identifiers.androidIdFingerprint,
+                        // 旧服务端兼容字段；新服务端会校验它与 androidIdFingerprint 一致。
+                        deviceFingerprint = identifiers.androidIdFingerprint,
+                    )
                 )
-            )
-        }.requireData()
+            }.requireData()
+        } catch (error: ClanApiException) {
+            if (error.businessCode == DEVICE_IDENTITY_CONFLICT) {
+                throw ClanServiceException("设备标识冲突，请联系管理员处理", error)
+            }
+            throw error
+        }
         if (response.deviceId.isBlank() || response.deviceToken.isBlank()) {
             throw ClanApiException(null, null, "注册响应缺少设备凭据")
         }
         return DeviceCredentials(
-            response.deviceId,
-            response.deviceToken
+            deviceId = response.deviceId,
+            deviceToken = response.deviceToken,
+            reportedOaidFingerprint = identifiers.oaidFingerprint,
+            reportedAndroidIdFingerprint = identifiers.androidIdFingerprint,
         ).also { credentialStore.save(it) }
     }
 
@@ -696,6 +749,7 @@ class RealClanRepository(
         private const val DEVICE_NOT_FOUND = 40003
         private const val DEVICE_OFFLINE = 40004
         private const val RATE_LIMITED = 40005
+        private const val DEVICE_IDENTITY_CONFLICT = 40006
         private const val PAIRING_CODE_INVALID = 40101
         private const val PAIRING_CODE_EXPIRED = 40102
         private const val PAIRING_CODE_USED = 40103

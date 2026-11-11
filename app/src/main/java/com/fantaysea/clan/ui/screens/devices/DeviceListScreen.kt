@@ -1,13 +1,13 @@
-package com.fantaysea.clan.ui.control
+package com.fantaysea.clan.ui.screens.devices
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -80,8 +79,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fantaysea.clan.core.di.LocalClanRepository
 import com.fantaysea.clan.core.di.LocalNavigator
-import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.SessionControlDest
 import com.fantaysea.clan.data.repository.PairedDevice
+import com.fantaysea.clan.ui.components.PairCodeDialog
+import com.fantaysea.clan.ui.icons.ClanIcons
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -89,14 +90,14 @@ import kotlin.math.roundToInt
  * 远程设备列表页
  */
 @Composable
-fun ControlHomeScreen() {
+fun DeviceListScreen() {
     val navigator = LocalNavigator.current
     val repository = LocalClanRepository.current
-    val vm: ControlHomeViewModel = viewModel { ControlHomeViewModel(repository) }
+    val vm: DeviceListVm = viewModel { DeviceListVm(repository) }
     val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val actions = remember(vm, navigator) {
-        ControlHomeActions(
+        DeviceListActions(
             onBack = navigator::back,
             //重试
             onRetry = vm::retry,
@@ -144,7 +145,7 @@ fun ControlHomeScreen() {
         //清空被控设备信息
         vm.consumeSessionPeer()
         //前往设备控制页
-        navigator.navigateTo(HomeDestination.ControlSession(peer.id))
+        navigator.navigateTo(SessionControlDest(peer.id))
     }
 
     LaunchedEffect(Unit) {
@@ -163,9 +164,9 @@ fun ControlHomeScreen() {
 
 @Composable
 internal fun ControlHomeScreenContent(
-    state: ControlHomeUiState,
+    state: DeviceListUiState,
     snackbarHostState: SnackbarHostState,
-    actions: ControlHomeActions,
+    actions: DeviceListActions,
 ) {
     val devices = (state.pageState as? DeviceListState.Success)?.devices.orEmpty()
     Scaffold(
@@ -439,7 +440,7 @@ internal fun EditDeviceDialog(
                     enabled = !saving,
                     isError = error != null,
                     supportingText = {
-                        Text(error ?: "最多 ${ControlHomeViewModel.MAX_DEVICE_NAME_LENGTH} 个字符")
+                        Text(error ?: "最多 ${DeviceListVm.MAX_DEVICE_NAME_LENGTH} 个字符")
                     },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { onConfirm() }),
@@ -511,7 +512,7 @@ private fun EmptyView(onAdd: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Outlined.PhoneAndroid,
+                imageVector = ClanIcons.PhoneAndroid,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(44.dp),
@@ -952,7 +953,7 @@ private fun relativeTime(epoch: Long?): String {
     val minutes = diff / 60_000
     return when {
         minutes < 1 -> "刚刚在线"
-        minutes < 60 -> "${minutes} 分钟前在线"
+        minutes < 60 -> "$minutes 分钟前在线"
         diff < 24L * 3600_000 -> "${diff / 3600_000} 小时前在线"
         else -> "${diff / (24L * 3600_000)} 天前在线"
     }
@@ -968,7 +969,7 @@ private fun UnavailableView() {
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.PhoneAndroid,
+            imageVector = ClanIcons.PhoneAndroid,
             contentDescription = null,
             modifier = Modifier.size(56.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,

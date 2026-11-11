@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.onboarding
+package com.fantaysea.clan.ui.screens.onboarding
 
 import android.Manifest
 import android.app.Activity
@@ -7,7 +7,6 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

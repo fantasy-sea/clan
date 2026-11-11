@@ -2,6 +2,8 @@ package com.fantaysea.clan
 
 import android.app.Application
 import com.fantaysea.clan.data.AndroidDeviceCredentialStore
+import com.fantaysea.clan.data.AndroidDeviceIdentity
+import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.RealClanRepository
 import com.fantaysea.clan.media.ScreenCaptureManager
@@ -21,10 +23,14 @@ class ClanApplication : Application() {
             credentialStore = AndroidDeviceCredentialStore(this),
         )
     }
-
+    /**
+     * 设备级稳定标识（OAID + ANDROID_ID）。
+     * OAID 只在用户同意隐私提示后由 App 读取；读取失败时自动降级到 ANDROID_ID。
+     */
+    val deviceIdentity: AndroidDeviceIdentity by lazy { AndroidDeviceIdentity(this) }
+    val appPreferences by lazy { AppPreferences(applicationContext) }
     /** 屏幕捕获授权与前台服务共享的进程级状态。 */
     val screenCaptureManager: ScreenCaptureManager by lazy { ScreenCaptureManager(this) }
-
     /** WebRTC 媒体链路；构造时即开始订阅仓库事件，避免页面进入前丢失 offer/ICE。 */
     val webRtcManager: WebRtcManager by lazy {
         WebRtcManager(this, repository, screenCaptureManager)

@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.share
+package com.fantaysea.clan.ui.components
 
 import android.app.Activity
 import android.content.Context
@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.Accessibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +51,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.fantaysea.clan.R
 import com.fantaysea.clan.service.AccessibilitySettingsTarget
+import com.fantaysea.clan.ui.icons.ClanIcons
+import com.fantaysea.clan.ui.screens.share.AccessibilityGuideStage
+import com.fantaysea.clan.ui.screens.share.AccessibilityGuideState
 
 /**
  * 无障碍分步引导（全屏）。
@@ -60,7 +62,7 @@ import com.fantaysea.clan.service.AccessibilitySettingsTarget
  * 回来后明确告诉用户「已开启」或「还没开，下一步怎么做」；同时把
  * Android 13+ 非商店安装的「受限设置」和各家 ROM 的入口差异写进帮助。
  *
- * 显示与否、阶段切换由 [ShareViewModel] 的 [AccessibilityGuideState] 决定。
+ * 显示与否、阶段切换由 [com.fantaysea.clan.ui.share.ShareViewModel] 的 [com.fantaysea.clan.ui.share.AccessibilityGuideState] 决定。
  */
 @Composable
 internal fun AccessibilitySetupGuide(
@@ -124,7 +126,7 @@ private fun GuideIntro(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Accessibility,
+                    imageVector = ClanIcons.Accessibility,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                 )

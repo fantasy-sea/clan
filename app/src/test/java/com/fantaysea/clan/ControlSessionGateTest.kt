@@ -4,7 +4,7 @@ import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.media.RemoteVideoSize
 import com.fantaysea.clan.media.RemoteVideoState
 import com.fantaysea.clan.media.WebRtcState
-import com.fantaysea.clan.ui.session.ControlSessionUiState
+import com.fantaysea.clan.ui.screens.session.ControlSessionUiState
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

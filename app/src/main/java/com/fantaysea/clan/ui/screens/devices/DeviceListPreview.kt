@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.control
+package com.fantaysea.clan.ui.screens.devices
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.repository.PairedDevice
+import com.fantaysea.clan.ui.components.PairCodeDialog
 import com.fantaysea.clan.ui.theme.ClanTheme
 
 private val previewDeviceList = listOf(
@@ -35,12 +36,12 @@ private val previewDeviceList = listOf(
 )
 
 @Composable
-private fun ControlHomePreviewContent(state: ControlHomeUiState) {
+private fun ControlHomePreviewContent(state: DeviceListUiState) {
     ClanTheme {
         ControlHomeScreenContent(
             state = state,
             snackbarHostState = remember { SnackbarHostState() },
-            actions = ControlHomeActions(),
+            actions = DeviceListActions(),
         )
     }
 }
@@ -49,7 +50,7 @@ private fun ControlHomePreviewContent(state: ControlHomeUiState) {
 @Composable
 fun ControlHomeScreenPreview() {
     ControlHomePreviewContent(
-        state = ControlHomeUiState(
+        state = DeviceListUiState(
             pageState = DeviceListState.Success(previewDeviceList),
         ),
     )
@@ -59,7 +60,7 @@ fun ControlHomeScreenPreview() {
 @Composable
 private fun ControlHomeLoadingPreview() {
     ControlHomePreviewContent(
-        state = ControlHomeUiState(
+        state = DeviceListUiState(
             pageState = DeviceListState.Loading
         )
     )
@@ -68,14 +69,14 @@ private fun ControlHomeLoadingPreview() {
 @Preview(name = "空设备列表", group = "页面状态", showBackground = true)
 @Composable
 private fun ControlHomeEmptyPreview() {
-    ControlHomePreviewContent(ControlHomeUiState(pageState = DeviceListState.Empty))
+    ControlHomePreviewContent(DeviceListUiState(pageState = DeviceListState.Empty))
 }
 
 @Preview(name = "加载失败", group = "页面状态", showBackground = true)
 @Composable
 private fun ControlHomeErrorPreview() {
     ControlHomePreviewContent(
-        state = ControlHomeUiState(
+        state = DeviceListUiState(
             pageState = DeviceListState.Error("网络连接失败，请稍后重试")
         ),
     )
@@ -85,7 +86,7 @@ private fun ControlHomeErrorPreview() {
 @Composable
 private fun ControlHomeWaitingPreview() {
     ControlHomePreviewContent(
-        state = ControlHomeUiState(
+        state = DeviceListUiState(
             pageState = DeviceListState.Success(previewDeviceList),
             pendingControl = PendingControl(previewDeviceList.first(), "session_preview"),
         ),
@@ -96,7 +97,7 @@ private fun ControlHomeWaitingPreview() {
 @Composable
 private fun ControlHomeSelectionPreview() {
     ControlHomePreviewContent(
-        state = ControlHomeUiState(
+        state = DeviceListUiState(
             pageState = DeviceListState.Success(previewDeviceList),
             selectionMode = true,
             selectedDeviceIds = setOf(previewDeviceList.first().device.id),
@@ -163,7 +164,7 @@ private fun DeleteDeviceConfirmDialogPreview() {
 private fun PairCodeDialogPreview(state:PairPhase){
     ClanTheme() {
         PairCodeDialog(
-            state = ControlHomeUiState(pairPhase = state),
+            state = DeviceListUiState(pairPhase = state),
             onDismiss = {},
             onCodeChanged = {}
         ) {}

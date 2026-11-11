@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.session
+package com.fantaysea.clan.ui.components
 
 /** 视频内容在容器内的等比显示区域（像素）。 */
 data class VideoRect(

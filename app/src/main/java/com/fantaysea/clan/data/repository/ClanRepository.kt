@@ -1,6 +1,7 @@
 package com.fantaysea.clan.data.repository
 
 import androidx.compose.runtime.Immutable
+import com.fantaysea.clan.data.DeviceIdentifiers
 import com.fantaysea.clan.data.model.ActiveSession
 import com.fantaysea.clan.data.model.ControlCommand
 import com.fantaysea.clan.data.model.Device
@@ -13,12 +14,17 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 设备注册信息
+ *
+ * identifiers 携带 OAID / ANDROID_ID 的客户端 fingerprint：同一设备 + 同一签名密钥 +
+ * 同一用户下保持稳定，服务端按 OAID → ANDROID_ID 分层匹配并复用 deviceId。
+ * 两个标识都读取失败时为 null/空集合，只有真正需要注册时才会报错。
  */
 @Immutable
 data class DeviceRegistration(
     val deviceName: String,
     val model: String,
-    val androidVersion: String
+    val androidVersion: String,
+    val identifiers: DeviceIdentifiers,
 )
 
 enum class BackendCapability {

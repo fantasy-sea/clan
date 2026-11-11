@@ -2,12 +2,14 @@ package com.fantaysea.clan
 
 import com.fantaysea.clan.data.DeviceCredentialStore
 import com.fantaysea.clan.data.DeviceCredentials
+import com.fantaysea.clan.data.DeviceIdentifiers
 import com.fantaysea.clan.data.model.ControlCommand
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.data.model.SessionRole
 import com.fantaysea.clan.data.model.SessionStatus
 import com.fantaysea.clan.data.repository.BackendCapability
 import com.fantaysea.clan.data.repository.ClanApiException
+import com.fantaysea.clan.data.repository.ClanServiceException
 import com.fantaysea.clan.data.repository.DeviceOfflineException
 import com.fantaysea.clan.data.repository.DeviceRegistration
 import com.fantaysea.clan.data.repository.ExpiredPairingCodeException
@@ -40,7 +42,23 @@ class RealClanRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var credentials: FakeCredentialStore
     private lateinit var realtime: FakeWebSocketClient
-    private val registration = DeviceRegistration("Pixel 8", "Pixel 8", "16")
+    private val fingerprint = "a".repeat(64)
+    private val oaidFingerprint = "b".repeat(64)
+    private val registration = DeviceRegistration(
+        "Pixel 8",
+        "Pixel 8",
+        "16",
+        identifiers = DeviceIdentifiers(androidIdFingerprint = fingerprint),
+    )
+    private val registrationWithOaid = DeviceRegistration(
+        "Pixel 8",
+        "Pixel 8",
+        "16",
+        identifiers = DeviceIdentifiers(
+            oaidFingerprint = oaidFingerprint,
+            androidIdFingerprint = fingerprint,
+        ),
+    )
 
     @Before
     fun setUp() {
@@ -60,13 +78,21 @@ class RealClanRepositoryTest {
         server.enqueue(jsonResponse(registerEnvelope("dev_01TEST", "secret-token")))
         server.enqueue(jsonResponse(deviceEnvelope("dev_01TEST")))
 
-        val device = repository().initializeSelf(registration)
+        val device = repository().initializeSelf(registrationWithOaid)
 
         assertEquals("dev_01TEST", device.id)
         assertEquals("16", device.androidVersion)
         assertEquals(Instant.parse("2026-09-13T02:03:04Z").toEpochMilli(), device.createdAt)
         assertNull(device.lastOnlineAt) // malformed time is deliberately tolerated
-        assertEquals(DeviceCredentials("dev_01TEST", "secret-token"), credentials.value)
+        assertEquals(
+            DeviceCredentials(
+                "dev_01TEST",
+                "secret-token",
+                reportedOaidFingerprint = oaidFingerprint,
+                reportedAndroidIdFingerprint = fingerprint,
+            ),
+            credentials.value,
+        )
         assertEquals(1, credentials.saved.size)
 
         val register = server.takeRequest()
@@ -74,11 +100,33 @@ class RealClanRepositoryTest {
         val requestJson = register.body.readUtf8()
         assertTrue(requestJson.contains("\"platform\":\"ANDROID\""))
         assertTrue(requestJson.contains("\"androidVersion\":\"16\""))
+        assertTrue(requestJson.contains("\"oaidFingerprint\":\"$oaidFingerprint\""))
+        assertTrue(requestJson.contains("\"androidIdFingerprint\":\"$fingerprint\""))
+        assertTrue(requestJson.contains("\"deviceFingerprint\":\"$fingerprint\""))
 
         val me = server.takeRequest()
         assertEquals("/api/v1/devices/me", me.path)
         assertEquals("Bearer secret-token", me.getHeader("Authorization"))
         assertFalse(device.toString().contains("secret-token"))
+    }
+
+    @Test
+    fun `registration with only OAID omits Android ID fields`() = runBlocking {
+        val oaidOnly = DeviceRegistration(
+            "Pixel 8",
+            "Pixel 8",
+            "16",
+            identifiers = DeviceIdentifiers(oaidFingerprint = oaidFingerprint),
+        )
+        server.enqueue(jsonResponse(registerEnvelope("dev_oaid", "token")))
+        server.enqueue(jsonResponse(deviceEnvelope("dev_oaid")))
+
+        repository().initializeSelf(oaidOnly)
+
+        val requestJson = server.takeRequest().body.readUtf8()
+        assertTrue(requestJson.contains("\"oaidFingerprint\":\"$oaidFingerprint\""))
+        assertFalse(requestJson.contains("\"androidIdFingerprint\""))
+        assertFalse(requestJson.contains("\"deviceFingerprint\""))
     }
 
     @Test
@@ -96,6 +144,108 @@ class RealClanRepositoryTest {
     }
 
     @Test
+    fun `registration without identifier fails locally`() {
+        val registrationWithoutIdentifier = DeviceRegistration(
+            "Pixel 8",
+            "Pixel 8",
+            "16",
+            identifiers = DeviceIdentifiers(),
+        )
+
+        val error = assertThrows(ClanApiException::class.java) {
+            runBlocking { repository().initializeSelf(registrationWithoutIdentifier) }
+        }
+
+        assertEquals("无法读取设备标识，无法完成注册", error.message)
+        assertEquals(0, server.requestCount)
+        assertTrue(credentials.saved.isEmpty())
+    }
+
+    @Test
+    fun `existing credentials attach newly available OAID once`() = runBlocking {
+        credentials.value = DeviceCredentials("dev_existing", "old-token")
+        server.enqueue(jsonResponse(registerEnvelope("dev_existing", "new-token")))
+        server.enqueue(jsonResponse(deviceEnvelope("dev_existing")))
+
+        repository().initializeSelf(registrationWithOaid)
+
+        val register = server.takeRequest()
+        assertEquals("/api/v1/devices/register", register.path)
+        assertTrue(register.body.readUtf8().contains("\"oaidFingerprint\":\"$oaidFingerprint\""))
+        val me = server.takeRequest()
+        assertEquals("Bearer new-token", me.getHeader("Authorization"))
+        assertEquals(
+            DeviceCredentials(
+                "dev_existing",
+                "new-token",
+                reportedOaidFingerprint = oaidFingerprint,
+                reportedAndroidIdFingerprint = fingerprint,
+            ),
+            credentials.value,
+        )
+    }
+
+    @Test
+    fun `OAID enrichment failure keeps existing credentials`() = runBlocking {
+        credentials.value = DeviceCredentials("dev_existing", "old-token")
+        server.enqueue(jsonResponse("""{"code":40005,"message":"Rate limited","data":null}""", 429))
+        server.enqueue(jsonResponse(deviceEnvelope("dev_existing")))
+
+        val device = repository().initializeSelf(registrationWithOaid)
+
+        assertEquals("dev_existing", device.id)
+        val register = server.takeRequest()
+        assertEquals("/api/v1/devices/register", register.path)
+        val me = server.takeRequest()
+        assertEquals("Bearer old-token", me.getHeader("Authorization"))
+        assertEquals(DeviceCredentials("dev_existing", "old-token"), credentials.value)
+        assertTrue(credentials.saved.isEmpty())
+    }
+
+    @Test
+    fun `OAID reset with changed ANDROID_ID is not enriched`() = runBlocking {
+        credentials.value = DeviceCredentials(
+            "dev_existing",
+            "token",
+            reportedOaidFingerprint = "c".repeat(64),
+            reportedAndroidIdFingerprint = "d".repeat(64),
+        )
+        server.enqueue(jsonResponse(deviceEnvelope("dev_existing")))
+
+        repository().initializeSelf(registrationWithOaid)
+
+        assertEquals(1, server.requestCount)
+        assertEquals("/api/v1/devices/me", server.takeRequest().path)
+    }
+
+    @Test
+    fun `40006 identity conflict on first registration maps to readable message`() {
+        server.enqueue(jsonResponse("""{"code":40006,"message":"Device identity conflict","data":null}""", 409))
+
+        val error = assertThrows(ClanServiceException::class.java) {
+            runBlocking { repository().initializeSelf(registrationWithOaid) }
+        }
+
+        assertEquals("设备标识冲突，请联系管理员处理", error.message)
+        assertTrue(credentials.saved.isEmpty())
+    }
+
+    @Test
+    fun `OAID enrichment conflict falls back to existing credentials`() = runBlocking {
+        credentials.value = DeviceCredentials("dev_existing", "old-token")
+        server.enqueue(jsonResponse("""{"code":40006,"message":"Device identity conflict","data":null}""", 409))
+        server.enqueue(jsonResponse(deviceEnvelope("dev_existing")))
+
+        val device = repository().initializeSelf(registrationWithOaid)
+
+        assertEquals("dev_existing", device.id)
+        // 第一次是补挂注册（409），第二次才是 /me。
+        server.takeRequest()
+        assertEquals("/api/v1/devices/me", server.takeRequest().path)
+        assertEquals(DeviceCredentials("dev_existing", "old-token"), credentials.value)
+    }
+
+    @Test
     fun `40002 clears credentials and re-registers exactly once`() = runBlocking {
         credentials.value = DeviceCredentials("dev_old", "expired-token")
         server.enqueue(jsonResponse("""{"code":40002,"message":"Invalid device token","data":null}""", 401))
@@ -106,7 +256,14 @@ class RealClanRepositoryTest {
 
         assertEquals("dev_new", device.id)
         assertEquals(1, credentials.clearCount)
-        assertEquals(DeviceCredentials("dev_new", "new-token"), credentials.value)
+        assertEquals(
+            DeviceCredentials(
+                "dev_new",
+                "new-token",
+                reportedAndroidIdFingerprint = fingerprint,
+            ),
+            credentials.value,
+        )
         assertEquals(3, server.requestCount)
         server.takeRequest()
         server.takeRequest()
@@ -459,7 +616,14 @@ class RealClanRepositoryTest {
         repository().initializeSelf(registration)
 
         assertNull(credentials.legacyToken)
-        assertEquals(DeviceCredentials("dev_migrated", "server-token"), credentials.saved.single())
+        assertEquals(
+            DeviceCredentials(
+                "dev_migrated",
+                "server-token",
+                reportedAndroidIdFingerprint = fingerprint,
+            ),
+            credentials.saved.single(),
+        )
     }
 
     private fun peer(id: String) = Device(

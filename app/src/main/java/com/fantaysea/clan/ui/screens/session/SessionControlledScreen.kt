@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.session
+package com.fantaysea.clan.ui.screens.session
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PresentToAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,6 +67,7 @@ import com.fantaysea.clan.media.WebRtcState
 import com.fantaysea.clan.service.AccessibilityControlExecutor
 import com.fantaysea.clan.service.ClanAccessibilityService
 import com.fantaysea.clan.service.ControlExecutionResult
+import com.fantaysea.clan.ui.icons.ClanIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -85,7 +84,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * FAILED 和原因，不再静默 ACK。
  */
 @Composable
-fun ControlledSessionScreen(peer: Device) {
+fun SessionControlledScreen(peer: Device) {
     val navigator = LocalNavigator.current
     val repository = LocalClanRepository.current
     val screenCapture = LocalScreenCaptureManager.current
@@ -327,7 +326,7 @@ fun ControlledSessionScreen(peer: Device) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.PresentToAll,
+                    imageVector = ClanIcons.PresentToAll,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(56.dp),

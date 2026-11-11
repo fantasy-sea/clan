@@ -116,6 +116,12 @@ data class RegisterDeviceRequest(
     val platform: String,
     val model: String,
     val androidVersion: String,
+    /** SHA-256(OAID) 的 64 位小写 hex；OAID 不可用时为 null。 */
+    val oaidFingerprint: String? = null,
+    /** SHA-256(ANDROID_ID) 的 64 位小写 hex。 */
+    val androidIdFingerprint: String? = null,
+    /** 旧服务端兼容字段，值与 [androidIdFingerprint] 相同；新版服务端会校验二者一致。 */
+    val deviceFingerprint: String? = null,
 )
 
 @Serializable

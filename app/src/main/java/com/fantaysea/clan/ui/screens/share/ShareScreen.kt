@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.share
+package com.fantaysea.clan.ui.screens.share
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,11 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.outlined.Accessibility
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,15 +62,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fantaysea.clan.core.di.LocalClanRepository
 import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.core.di.LocalScreenCaptureManager
-import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.SessionControlledDest
 import com.fantaysea.clan.data.PairingCodeGenerator
 import com.fantaysea.clan.data.model.Device
 import com.fantaysea.clan.service.AccessibilitySettingsTarget
 import com.fantaysea.clan.service.AccessibilitySetupCoordinator
 import com.fantaysea.clan.service.ClanAccessibilityService
+import com.fantaysea.clan.ui.components.AccessibilitySetupGuide
 import com.fantaysea.clan.ui.components.CountdownRing
+import com.fantaysea.clan.ui.icons.ClanIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 
 private const val VALIDITY_MS = PairingCodeGenerator.VALIDITY_MS
@@ -108,7 +107,7 @@ fun ShareScreen() {
     LaunchedEffect(state.controlledSessionPeer) {
         val peer = state.controlledSessionPeer ?: return@LaunchedEffect
         vm.consumeSessionPeer()
-        navigator.navigateTo(HomeDestination.ControlledSession(peer.id))
+        navigator.navigateTo(SessionControlledDest(peer.id))
     }
 
     LaunchedEffect(Unit) {
@@ -146,7 +145,7 @@ fun ShareScreen() {
             if (guide.visible && guide.stage == AccessibilityGuideStage.Waiting) {
                 scope.launch {
                     repeat(ACCESSIBILITY_RECHECK_ATTEMPTS) {
-                        delay(ACCESSIBILITY_RECHECK_INTERVAL_MS)
+                        delay(ACCESSIBILITY_RECHECK_INTERVAL_MS.milliseconds)
                         if (ClanAccessibilityService.isEnabled(context)) {
                             vm.onAccessibilitySetupReturned(true)
                             AccessibilitySetupCoordinator.clear()
@@ -167,7 +166,7 @@ fun ShareScreen() {
     // 成功态停留一下再自动收起，让用户看清「已开启」；若此时有等待中的控制请求，确认弹窗会随之出现。
     LaunchedEffect(state.accessibilityGuide.visible, state.accessibilityGuide.stage) {
         if (state.accessibilityGuide.visible && state.accessibilityGuide.stage == AccessibilityGuideStage.Enabled) {
-            delay(ACCESSIBILITY_SUCCESS_DISMISS_MS)
+            delay(ACCESSIBILITY_SUCCESS_DISMISS_MS.milliseconds)
             vm.dismissAccessibilityGuide()
         }
     }
@@ -359,7 +358,7 @@ private fun ShareUnavailable() {
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
+            imageVector = ClanIcons.ScreenShare,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -420,7 +419,7 @@ private fun SharePermissionSection(
             Spacer(modifier = Modifier.height(12.dp))
 
             PermissionRow(
-                icon = Icons.AutoMirrored.Outlined.ScreenShare,
+                icon = ClanIcons.ScreenShare,
                 title = "屏幕共享",
                 granted = captureGranted,
                 grantedText = "已授权，对方可实时看到本机画面",
@@ -433,7 +432,7 @@ private fun SharePermissionSection(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             )
             PermissionRow(
-                icon = Icons.Outlined.Accessibility,
+                icon = ClanIcons.Accessibility,
                 title = "无障碍控制",
                 granted = accessibilityGranted,
                 grantedText = "已开启，对方可代为执行点击、滑动等操作",
@@ -549,7 +548,7 @@ private fun ShareContent(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.PhoneAndroid,
+                        imageVector = ClanIcons.PhoneAndroid,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -750,7 +749,7 @@ private fun PromptPermissionLine(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = if (granted) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            imageVector = if (granted) Icons.Filled.CheckCircle else ClanIcons.RadioButtonUnchecked,
             contentDescription = null,
             tint = if (granted) ColorGreen else MaterialTheme.colorScheme.outline,
             modifier = Modifier.size(18.dp),

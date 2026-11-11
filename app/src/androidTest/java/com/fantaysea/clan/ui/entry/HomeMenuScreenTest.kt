@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.home
+package com.fantaysea.clan.ui.entry
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
@@ -7,15 +7,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.core.navigation.AppDestination
-import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.DeviceListDest
 import com.fantaysea.clan.core.navigation.Navigator
+import com.fantaysea.clan.core.navigation.ShareScreenDest
+import com.fantaysea.clan.ui.screens.entry.ModuleEntryScreen
 import com.fantaysea.clan.ui.theme.ClanTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
 class HomeMenuScreenTest {
-
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
@@ -36,7 +37,9 @@ class HomeMenuScreenTest {
         composeRule.setContent {
             ClanTheme {
                 CompositionLocalProvider(LocalNavigator provides navigator) {
-                    HomeMenuScreen(isPlayAnimation = false)
+                    ModuleEntryScreen(
+                        isPlayAnimation = false
+                    )
                 }
             }
         }
@@ -45,7 +48,7 @@ class HomeMenuScreenTest {
 
         composeRule.runOnIdle {
             assertEquals(
-                listOf<AppDestination>(HomeDestination.ControlHome),
+                listOf<AppDestination>(DeviceListDest),
                 navigator.destinations,
             )
         }
@@ -57,7 +60,9 @@ class HomeMenuScreenTest {
         composeRule.setContent {
             ClanTheme {
                 CompositionLocalProvider(LocalNavigator provides navigator) {
-                    HomeMenuScreen(isPlayAnimation = false)
+                    ModuleEntryScreen(
+                        isPlayAnimation = false
+                    )
                 }
             }
         }
@@ -66,7 +71,7 @@ class HomeMenuScreenTest {
 
         composeRule.runOnIdle {
             assertEquals(
-                listOf<AppDestination>(HomeDestination.Share),
+                listOf<AppDestination>(ShareScreenDest),
                 navigator.destinations,
             )
         }

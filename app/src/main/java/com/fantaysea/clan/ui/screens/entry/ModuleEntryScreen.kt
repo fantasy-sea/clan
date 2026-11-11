@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.home
+package com.fantaysea.clan.ui.screens.entry
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,19 +38,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.fantaysea.clan.core.di.LocalNavigator
-import com.fantaysea.clan.core.navigation.HomeDestination
+import com.fantaysea.clan.core.navigation.DeviceListDest
+import com.fantaysea.clan.core.navigation.ShareScreenDest
 import com.fantaysea.clan.data.model.HomeMenuCardInfo
+import com.fantaysea.clan.ui.icons.ClanIcons
 
-/**
- * 产品入口页: 品牌区 + 两个入口大卡片(远程控制 / 共享屏幕)。
- * 暖色渐变背景 + 装饰光斑 + 交错入场 + 按压缩放。
- */
-@Preview(name = "开屏", showBackground = true)
+
 @Composable
-fun HomeMenuScreen(
+fun ModuleEntryScreen(
     isPlayAnimation: Boolean = true
 ) {
     val navigator = LocalNavigator.current
@@ -68,20 +64,20 @@ fun HomeMenuScreen(
                 "1",
                 "远程控制",
                 "操作已配对的家人设备",
-                Icons.AutoMirrored.Outlined.ScreenShare,
+                ClanIcons.ScreenShare,
                 120,
                 colorScheme.primaryContainer,
                 colorScheme.primary.copy(alpha = 0.75f),
-            ) { navigator.navigateTo(HomeDestination.ControlHome) },
+            ) { navigator.navigateTo(DeviceListDest) },
             HomeMenuCardInfo(
                 "2",
                 "共享屏幕",
                 "让家人协助操作",
-                Icons.AutoMirrored.Outlined.ScreenShare,
+                ClanIcons.ScreenShare,
                 240,
                 colorScheme.tertiaryContainer,
                 colorScheme.tertiary.copy(alpha = 0.75f),
-            ) { navigator.navigateTo(HomeDestination.Share) },
+            ) { navigator.navigateTo(ShareScreenDest) },
         )
     }
     Box(
@@ -143,7 +139,7 @@ fun HomeMenuScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.ScreenShare,
+                            imageVector = ClanIcons.ScreenShare,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(28.dp),
@@ -168,7 +164,7 @@ fun HomeMenuScreen(
             // 入口卡片(交错入场)
             moduleList.forEach {
                 Spacer(modifier = Modifier.height(20.dp))
-                MenuCard(
+                EntryCard(
                     visible = entered,
                     info = it,
                 )
@@ -186,7 +182,7 @@ fun HomeMenuScreen(
     }
 }
 @Composable
-private fun MenuCard(
+private fun EntryCard(
     visible: Boolean,
     info: HomeMenuCardInfo
 ) {

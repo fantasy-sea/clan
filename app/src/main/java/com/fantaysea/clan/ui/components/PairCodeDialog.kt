@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.control
+package com.fantaysea.clan.ui.components
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -26,7 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -37,8 +37,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.fantaysea.clan.ui.components.SixDigitCodeInput
-import com.fantaysea.clan.ui.components.shake
+import com.fantaysea.clan.ui.screens.devices.DeviceListUiState
+import com.fantaysea.clan.ui.screens.devices.PairPhase
 
 /**
  * 「添加新设备」配对码弹窗。
@@ -47,7 +47,7 @@ import com.fantaysea.clan.ui.components.shake
  */
 @Composable
 internal fun PairCodeDialog(
-    state: ControlHomeUiState,
+    state: DeviceListUiState,
     onDismiss: () -> Unit,
     onCodeChanged: (String) -> Unit,
     onComplete: (String) -> Unit,
@@ -107,7 +107,7 @@ internal fun PairCodeDialog(
 
 @Composable
 private fun InputContent(
-    state: ControlHomeUiState,
+    state: DeviceListUiState,
     isError: Boolean,
     onCodeChanged: (String) -> Unit,
     onComplete: (String) -> Unit,
@@ -128,7 +128,7 @@ private fun InputContent(
     Spacer(modifier = Modifier.height(28.dp))
 
     Box(modifier = Modifier.shake(trigger = isError)) {
-        androidx.compose.runtime.key(state.resetNonce) {
+        key(state.resetNonce) {
             SixDigitCodeInput(
                 value = state.pairCode,
                 onValueChange = onCodeChanged,
@@ -224,4 +224,19 @@ private fun SuccessContent() {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
     )
+}
+
+
+/**
+ * 配对码输入纯逻辑(无 Android/Compose 依赖, 便于单测)。
+ */
+object PairCodeInput {
+    const val LENGTH = 6
+
+    /** 过滤为非数字并截断到 6 位 */
+    fun sanitize(raw: String): String = raw.filter { it.isDigit() }.take(LENGTH)
+
+    /** 是否已输入完整 6 位数字 */
+    fun isComplete(digits: String): Boolean =
+        digits.length == LENGTH && digits.all { it.isDigit() }
 }

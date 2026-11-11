@@ -1,5 +1,6 @@
 package com.fantaysea.clan
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,9 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.fantaysea.clan.core.di.LocalAppPreferences
 import com.fantaysea.clan.core.di.LocalClanRepository
@@ -27,11 +30,15 @@ import com.fantaysea.clan.core.di.LocalScreenCaptureManager
 import com.fantaysea.clan.core.di.LocalSelfDevice
 import com.fantaysea.clan.core.di.LocalWebRtcManager
 import com.fantaysea.clan.core.navigation.AppNavigation
+import com.fantaysea.clan.data.AndroidDeviceIdentity
 import com.fantaysea.clan.data.AppPreferences
 import com.fantaysea.clan.data.repository.ClanRepository
 import com.fantaysea.clan.data.repository.DeviceRegistration
 import com.fantaysea.clan.media.ScreenCaptureManager
 import com.fantaysea.clan.media.WebRtcManager
+import com.fantaysea.clan.ui.screens.consent.PrivacyConsentScreen
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private sealed interface IdentityState {
     data object Loading : IdentityState
@@ -42,53 +49,73 @@ private sealed interface IdentityState {
 @Composable
 fun App(
     appPreferences: AppPreferences,
-    repository: ClanRepository,
+    clanRepository: ClanRepository,
     screenCaptureManager: ScreenCaptureManager,
     webRtcManager: WebRtcManager,
+    deviceIdentity: AndroidDeviceIdentity,
 ) {
-    //连接服务端尝试次数
     var attempt by remember { mutableIntStateOf(0) }
     var identityState by remember { mutableStateOf<IdentityState>(IdentityState.Loading) }
+    var privacyConsent by remember { mutableStateOf<Boolean?>(null) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    LaunchedEffect(attempt) {
-        identityState = IdentityState.Loading
-        identityState = try {
-            //尝试注册本设备
-            // TODO 注册后有返回设备信息没有用上
-            repository.initializeSelf(
-                //传入设备注册信息
-                DeviceRegistration(
-                    deviceName = Build.MODEL,
-                    model = Build.MODEL,
-                    androidVersion = Build.VERSION.RELEASE,
-                )
-            )
-            IdentityState.Ready
-        } catch (error: Exception) {
-            IdentityState.Error(error.message ?: "无法连接服务端")
-        }
+    // 先读一次隐私同意状态；未读取完成时显示加载，避免先初始化身份再问用户同意。
+    LaunchedEffect(Unit) {
+        privacyConsent = runCatching { appPreferences.privacyConsentCompleted.first() }.getOrDefault(false)
     }
-    when (val state = identityState) {
-        IdentityState.Loading -> IdentityLoading()
-        IdentityState.Ready -> {
-            val selfDevice by repository.self.collectAsState()
-            //传入的值会传递给其下的所有子Composable
-            //其中所有Composable都能够访问LocalAppPreferences
-            CompositionLocalProvider(
-                //在其中提供共享变量，其下的所有子Composable都能够访问到声明的一个或多个共享变量
-                LocalAppPreferences provides appPreferences,
-                LocalClanRepository provides repository,
-                LocalSelfDevice provides selfDevice,
-                LocalScreenCaptureManager provides screenCaptureManager,
-                LocalWebRtcManager provides webRtcManager,
-            ) {
-                AppNavigation()
+
+    when (privacyConsent) {
+        null -> IdentityLoading()
+        false -> PrivacyConsentScreen(
+            onAgree = {
+                scope.launch {
+                    appPreferences.setPrivacyConsentCompleted(true)
+                    privacyConsent = true
+                }
+            },
+            onDecline = { (context as? Activity)?.finish() },
+        )
+        true -> {
+            LaunchedEffect(attempt) {
+                identityState = IdentityState.Loading
+                identityState = try {
+                    // OAID 只在用户同意后读取；读取失败会自动降级到 ANDROID_ID。
+                    val identifiers = deviceIdentity.identifiers(allowOaid = true)
+                    clanRepository.initializeSelf(
+                        DeviceRegistration(
+                            deviceName = Build.MODEL,
+                            model = Build.MODEL,
+                            androidVersion = Build.VERSION.RELEASE,
+                            identifiers = identifiers,
+                        ),
+                    )
+                    IdentityState.Ready
+                } catch (error: Exception) {
+                    IdentityState.Error(error.message ?: "无法连接服务端")
+                }
+            }
+            when (val state = identityState) {
+                IdentityState.Loading -> IdentityLoading()
+                IdentityState.Ready -> {
+                    val selfDevice by clanRepository.self.collectAsState()
+                    //传入的值会传递给其下的所有子Composable
+                    //其中所有Composable都能够访问LocalAppPreferences
+                    CompositionLocalProvider(
+                        //在其中提供共享变量，其下的所有Composable都能够访问到声明的一个或多个共享变量
+                        LocalAppPreferences provides appPreferences,
+                        LocalClanRepository provides clanRepository,
+                        LocalSelfDevice provides selfDevice,
+                        LocalScreenCaptureManager provides screenCaptureManager,
+                        LocalWebRtcManager provides webRtcManager,
+                    ) {
+                        AppNavigation()
+                    }
+                }
+                is IdentityState.Error -> IdentityError(state.message, onRetry = { attempt++ })
             }
         }
-
-        is IdentityState.Error -> IdentityError(state.message, onRetry = { attempt++ })
     }
-
 }
 
 @Composable
@@ -101,7 +128,6 @@ private fun IdentityLoading() {
         CircularProgressIndicator()
         Text("正在连接服务端", modifier = Modifier.padding(top = 16.dp))
     }
-
 }
 
 @Composable

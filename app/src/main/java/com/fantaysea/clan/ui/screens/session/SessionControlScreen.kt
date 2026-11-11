@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.session
+package com.fantaysea.clan.ui.screens.session
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
@@ -28,10 +28,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -73,6 +71,9 @@ import com.fantaysea.clan.media.RemoteVideoSize
 import com.fantaysea.clan.media.RemoteVideoState
 import com.fantaysea.clan.media.WebRtcStartResult
 import com.fantaysea.clan.media.WebRtcState
+import com.fantaysea.clan.ui.components.RemoteVideoSurface
+import com.fantaysea.clan.ui.components.fitVideoRect
+import com.fantaysea.clan.ui.icons.ClanIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -88,14 +89,14 @@ import kotlin.time.Duration.Companion.milliseconds
  * 该函数只承担副作用与数据绑定：读取 CompositionLocal、启动/停止媒体、收集仓库事件。
  * 纯界面部分在 [ControlSessionScreenContent]，可在不依赖真实媒体与仓库的情况下预览。
  *
- * 远端画面按 [fitVideoRect] 等比居中；触摸事件绑定在同一矩形上，避免黑边造成坐标偏移。
+ * 远端画面按 [com.fantaysea.clan.ui.components.fitVideoRect] 等比居中；触摸事件绑定在同一矩形上，避免黑边造成坐标偏移。
  *
  * 操作前提是“视频流正常”：服务端 CONNECTED + 本地 PeerConnection Connected + 已收到首帧
  * + 最近仍持续收帧。任一条件不满足时页面锁定全部操作，`sendCommand` 也会在发送前
  * 再次校验，避免状态竞态期间误发 CONTROL。
  */
 @Composable
-fun ControlSessionScreen(peer: Device) {
+fun SessionControlScreen(peer: Device) {
     val navigator = LocalNavigator.current
     val repository = LocalClanRepository.current
     val webRtc = LocalWebRtcManager.current
@@ -434,7 +435,7 @@ internal fun ControlSessionScreenContent(
                 if (videoSize == null) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Outlined.TouchApp,
+                            imageVector = ClanIcons.TouchApp,
                             contentDescription = null,
                             tint = Color(0xFF6E6E6E),
                             modifier = Modifier.size(72.dp),
@@ -502,7 +503,7 @@ internal fun ControlSessionScreenContent(
                 ControlPadButton(Icons.Filled.Home, "主页", enabled = canControl) {
                     onHomeCommand()
                 }
-                ControlPadButton(Icons.Filled.Apps, "最近任务", enabled = canControl) {
+                ControlPadButton(ClanIcons.Apps, "最近任务", enabled = canControl) {
                     onRecentsCommand()
                 }
             }

@@ -1,8 +1,12 @@
 package com.fantaysea.clan
 
-import com.fantaysea.clan.core.navigation.HomeDestination
-import com.fantaysea.clan.core.navigation.HomeGraph
+import com.fantaysea.clan.core.navigation.DeviceListDest
+import com.fantaysea.clan.core.navigation.InterconnectGraph
+import com.fantaysea.clan.core.navigation.ModuleEntryDest
 import com.fantaysea.clan.core.navigation.OnboardingDestination
+import com.fantaysea.clan.core.navigation.SessionControlDest
+import com.fantaysea.clan.core.navigation.SessionControlledDest
+import com.fantaysea.clan.core.navigation.ShareScreenDest
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.serializer
 import org.junit.Assert.assertEquals
@@ -17,7 +21,7 @@ class HomeDestinationTest {
 
     @Test
     fun `session route serializer carries deviceId`() {
-        val descriptor = serializer<HomeDestination.ControlSession>().descriptor
+        val descriptor = serializer<SessionControlledDest>().descriptor
         assertEquals(1, descriptor.elementsCount)
         assertEquals("deviceId", descriptor.getElementName(0))
         assertEquals(PrimitiveKind.STRING, descriptor.getElementDescriptor(0).kind)
@@ -26,12 +30,12 @@ class HomeDestinationTest {
     @Test
     fun `all routes have distinct serial names`() {
         val names = listOf(
-            serializer<HomeDestination.Home>(),
-            serializer<HomeDestination.ControlHome>(),
-            serializer<HomeDestination.Share>(),
-            serializer<HomeDestination.ControlSession>(),
-            serializer<HomeDestination.ControlledSession>(),
-            serializer<HomeGraph>(),
+            serializer<ModuleEntryDest>(),
+            serializer<DeviceListDest>(),
+            serializer<ShareScreenDest>(),
+            serializer<SessionControlDest>(),
+            serializer<SessionControlledDest>(),
+            serializer<InterconnectGraph>(),
             serializer<OnboardingDestination>(),
         ).map { it.descriptor.serialName }
 

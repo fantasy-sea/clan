@@ -15,13 +15,14 @@ import com.fantaysea.clan.data.repository.DeviceRegistration
 import com.fantaysea.clan.data.repository.PairedDevice
 import com.fantaysea.clan.data.repository.RemoteEvent
 import com.fantaysea.clan.service.AccessibilitySettingsTarget
-import com.fantaysea.clan.ui.control.ControlHomeViewModel
-import com.fantaysea.clan.ui.control.DeviceListState
-import com.fantaysea.clan.ui.control.PairPhase
-import com.fantaysea.clan.ui.share.AccessibilityGuideStage
-import com.fantaysea.clan.ui.share.SharePermissionState
-import com.fantaysea.clan.ui.share.ShareViewModel
+import com.fantaysea.clan.ui.screens.devices.DeviceListState
+import com.fantaysea.clan.ui.screens.devices.DeviceListVm
+import com.fantaysea.clan.ui.screens.devices.PairPhase
+import com.fantaysea.clan.ui.screens.share.AccessibilityGuideStage
+import com.fantaysea.clan.ui.screens.share.SharePermissionState
+import com.fantaysea.clan.ui.screens.share.ShareViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +34,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,7 +60,7 @@ class BackendCapabilityUiTest {
     fun `control view model shows unavailable without fetching devices`() = runTest(dispatcher) {
         val repository = TrackingRepository()
 
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
 
         assertTrue(viewModel.uiState.value.pageState is DeviceListState.Unavailable)
         assertEquals(0, repository.fetchCount)
@@ -72,7 +72,7 @@ class BackendCapabilityUiTest {
             capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.DEVICE_BINDINGS),
         )
 
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         advanceUntilIdle()
 
         assertEquals(1, repository.fetchCount)
@@ -89,7 +89,7 @@ class BackendCapabilityUiTest {
             capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.DEVICE_BINDINGS),
             devices = listOf(peer),
         )
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         advanceUntilIdle()
         assertEquals(1, repository.fetchCount)
 
@@ -325,7 +325,7 @@ class BackendCapabilityUiTest {
                 BackendCapability.PAIRING,
             ),
         )
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         runCurrent()
 
         viewModel.openPairDialog()
@@ -356,7 +356,7 @@ class BackendCapabilityUiTest {
                 BackendCapability.PAIRING,
             ),
         )
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         runCurrent()
         viewModel.openPairDialog()
         viewModel.submitPairCode("123456")
@@ -401,7 +401,7 @@ class BackendCapabilityUiTest {
             capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.DEVICE_BINDINGS),
             devices = listOf(first, second),
         )
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         advanceUntilIdle()
 
         // 长按进入多选, 默认选中长按项; 全选后批量删除。
@@ -435,7 +435,7 @@ class BackendCapabilityUiTest {
             capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.DEVICE_BINDINGS),
             devices = listOf(peer),
         )
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         advanceUntilIdle()
 
         viewModel.askEditDevice(peer)
@@ -462,7 +462,7 @@ class BackendCapabilityUiTest {
             capabilities = setOf(BackendCapability.DEVICE_IDENTITY, BackendCapability.DEVICE_BINDINGS),
             devices = listOf(peer),
         )
-        val viewModel = ControlHomeViewModel(repository)
+        val viewModel = DeviceListVm(repository)
         advanceUntilIdle()
 
         viewModel.askEditDevice(peer)

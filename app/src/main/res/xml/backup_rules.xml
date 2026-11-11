@@ -6,7 +6,8 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <exclude domain="root" path="datastore/device_credentials.preferences_pb" />
+    <!-- DataStore Preferences 位于 files/datastore/；不能把设备凭证备份到另一台手机。 -->
+    <exclude domain="file" path="datastore/device_credentials.preferences_pb" />
     <!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>

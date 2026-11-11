@@ -17,7 +17,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.fantaysea.clan.core.di.LocalAppPreferences
 import com.fantaysea.clan.core.di.LocalNavigator
-import com.fantaysea.clan.ui.onboarding.OnboardingScreen
+import com.fantaysea.clan.ui.screens.onboarding.OnboardingScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -38,7 +38,7 @@ fun AppNavigation() {
         // 冷启动入口只解析一次: 读完本地标识后固定 startDestination, 之后的跳转全部交给显式导航。
         // 这样写标识时不会改变 startDestination, 也就不会重建整张导航图(避免硬切与状态丢失)。
         value = if (appPreferences.onboardingCompleted.first())
-            HomeGraph else OnboardingDestination
+            InterconnectGraph else OnboardingDestination
     }
     if (startDestination == null) {
         // 本地标识尚未读到: 先铺主题背景占位, 避免首帧闪现首页再切到引导页
@@ -56,8 +56,8 @@ fun AppNavigation() {
             navController = navController,
             startDestination = startDestination!!,
         ) {
-            //首页导航图
-            homeGraph()
+            //连接导航图
+            interconnectGraph()
             //引导页
             composable<OnboardingDestination> {
                 OnboardingScreen(
@@ -68,10 +68,10 @@ fun AppNavigation() {
                         // 持久化"已看过引导页", 决定下次冷启动的入口
                         coroutineScope.launch { appPreferences.setOnboardingCompleted(true) }
                         // 显式跳转首页导航图, 并把引导页移出回退栈
-                        navController.navigate(HomeGraph) {
+                        navController.navigate(InterconnectGraph) {
                             popUpTo<OnboardingDestination> { inclusive = true }
                         }
-                    },
+                    }
                 )
             }
         }

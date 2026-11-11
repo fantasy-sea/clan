@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.session
+package com.fantaysea.clan.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect

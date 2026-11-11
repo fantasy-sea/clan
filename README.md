@@ -12,6 +12,7 @@
 - 被控方、控制方身份一键切换
 - 首页双入口：`远程控制`（已配对设备列表 / 左滑唤出删除 / 6 位配对码添加设备）与 `共享屏幕`（屏幕共享 + 无障碍控制双权限门控 / 6 位匹配码 / 60 秒倒计时自动刷新 / 配对与控制请求确认弹窗）
 - 已接入真实服务端：设备注册、绑定、配对、远程会话（发起/接受/拒绝/结束）与 WebSocket 实时信令由服务端驱动；控制指令、权限状态与 WebRTC 信令已按 P4 契约接入
+- 设备身份去重：注册上报 OAID + ANDROID_ID 的稳定指纹，服务端按 OAID → ANDROID_ID 分层匹配设备档案并复用同一 `deviceId`、轮换 token；清除应用数据/卸载重装不会重复注册，绑定关系保留。OAID 读取失败/被关闭时自动降级到 ANDROID_ID
 - 已接入 WebRTC 媒体链路：被控端通过 MediaProjection 采集屏幕、以 P2P SRTP 发送给控制端，控制端在会话页实时渲染；支持 STUN/TURN 配置
 - 已接入无障碍触控执行：控制端的轻触/滑动/返回/Home/最近任务由被控端通过 `dispatchGesture` / `performGlobalAction` 执行，并按结果回传 `CONTROL_RESULT`
 - 操作前置条件：只有服务端会话 `CONNECTED`、WebRTC 已连通、控制端收到首帧且最近 5 秒内持续收帧时才解锁操作；画面未就绪/停滞/重连时触摸层与底部按钮全部锁定
@@ -21,6 +22,16 @@
 ### 设备要求
 
 - Android 版本 >= 12
+
+### 本地调试服务端地址
+
+Debug 包的 API 地址优先取 Gradle 属性 `CLAN_API_BASE_URL`，其次取 `local.properties` 中的 `clan.apiBaseUrl`（该文件已被 gitignore），最后才使用 `app/build.gradle.kts` 的默认值。手机必须能访问该地址的 8080 端口；修改地址后需要重新构建安装。例如：
+
+```properties
+clan.apiBaseUrl=http://192.168.110.2:8080/
+```
+
+也可以临时用 `.\gradlew.bat :app:installDebug -PCLAN_API_BASE_URL=http://192.168.110.2:8080/` 覆盖。
 
 ## 技术说明
 

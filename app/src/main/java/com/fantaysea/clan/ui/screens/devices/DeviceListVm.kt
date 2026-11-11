@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.control
+package com.fantaysea.clan.ui.screens.devices
 
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -13,6 +13,7 @@ import com.fantaysea.clan.data.repository.ExpiredPairingCodeException
 import com.fantaysea.clan.data.repository.InvalidPairingCodeException
 import com.fantaysea.clan.data.repository.PairedDevice
 import com.fantaysea.clan.data.repository.RemoteEvent
+import com.fantaysea.clan.ui.components.PairCodeInput
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +27,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 //
 @Immutable
-data class ControlHomeUiState(
+data class DeviceListUiState(
     val pageState: DeviceListState = DeviceListState.Loading,
     val pairDialogVisible: Boolean = false,
     val pairPhase: PairPhase = PairPhase.Input,
@@ -92,11 +93,11 @@ enum class PairPhase {
     Waiting,
     Success
 }
-class ControlHomeViewModel(
+class DeviceListVm(
     private val repository: ClanRepository,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(ControlHomeUiState())
-    val uiState: StateFlow<ControlHomeUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(DeviceListUiState())
+    val uiState: StateFlow<DeviceListUiState> = _uiState.asStateFlow()
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 

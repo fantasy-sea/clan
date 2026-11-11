@@ -1,7 +1,7 @@
 package com.fantaysea.clan
 
-import com.fantaysea.clan.ui.session.VideoRect
-import com.fantaysea.clan.ui.session.fitVideoRect
+import com.fantaysea.clan.ui.components.VideoRect
+import com.fantaysea.clan.ui.components.fitVideoRect
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

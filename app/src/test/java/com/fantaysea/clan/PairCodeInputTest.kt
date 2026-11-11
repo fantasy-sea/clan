@@ -1,6 +1,6 @@
 package com.fantaysea.clan
 
-import com.fantaysea.clan.ui.control.PairCodeInput
+import com.fantaysea.clan.ui.components.PairCodeInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

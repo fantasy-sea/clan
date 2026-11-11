@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.session
+package com.fantaysea.clan.ui.screens.session
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
@@ -24,6 +22,7 @@ import com.fantaysea.clan.data.repository.RemoteEvent
 import com.fantaysea.clan.media.RemoteVideoSize
 import com.fantaysea.clan.media.RemoteVideoState
 import com.fantaysea.clan.media.WebRtcState
+import com.fantaysea.clan.ui.icons.ClanIcons
 import com.fantaysea.clan.ui.theme.ClanTheme
 
 /**
@@ -79,7 +78,7 @@ private fun PreviewRemoteScreen(modifier: Modifier = Modifier) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                imageVector = Icons.Outlined.TouchApp,
+                imageVector = ClanIcons.TouchApp,
                 contentDescription = null,
                 tint = Color(0xFF4A5058),
                 modifier = Modifier.size(64.dp),

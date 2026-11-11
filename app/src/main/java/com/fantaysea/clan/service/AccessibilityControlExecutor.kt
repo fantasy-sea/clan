@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 /** 被控端执行一条 CONTROL 指令的结果。 */
 sealed interface ControlExecutionResult {
@@ -33,14 +34,11 @@ sealed interface ControlExecutionResult {
  * 执行前会再次校验归一化坐标和滑动时长，防止旧版/异常客户端绕过服务端校验。
  */
 object AccessibilityControlExecutor {
-
     private const val TAP_DURATION_MS = 50L
     private const val GESTURE_TIMEOUT_MARGIN_MS = 2_000L
     private const val MIN_SWIPE_DURATION_MS = 50
     private const val MAX_SWIPE_DURATION_MS = 5_000
-
     private val mutex = Mutex()
-
     suspend fun execute(command: ControlCommand): ControlExecutionResult = mutex.withLock {
         command.validationError()?.let { error ->
             return@withLock ControlExecutionResult.Failure(error)
@@ -104,7 +102,10 @@ object AccessibilityControlExecutor {
 
             ControlCommand.Back -> globalAction(service, AccessibilityService.GLOBAL_ACTION_BACK)
             ControlCommand.Home -> globalAction(service, AccessibilityService.GLOBAL_ACTION_HOME)
-            ControlCommand.Recents -> globalAction(service, AccessibilityService.GLOBAL_ACTION_RECENTS)
+            ControlCommand.Recents -> globalAction(
+                service,
+                AccessibilityService.GLOBAL_ACTION_RECENTS
+            )
         }
     }
 
@@ -116,7 +117,7 @@ object AccessibilityControlExecutor {
     ): ControlExecutionResult {
         val stroke = GestureDescription.StrokeDescription(path, 0L, durationMs)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        val result = withTimeoutOrNull(timeoutMs) {
+        val result = withTimeoutOrNull(timeoutMs.milliseconds) {
             suspendCancellableCoroutine<ControlExecutionResult> { continuation ->
                 val dispatched = runCatching {
                     service.dispatchGesture(

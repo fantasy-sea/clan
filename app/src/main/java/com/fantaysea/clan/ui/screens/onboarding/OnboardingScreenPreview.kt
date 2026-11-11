@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.onboarding
+package com.fantaysea.clan.ui.screens.onboarding
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview

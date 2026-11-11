@@ -1,4 +1,4 @@
-package com.fantaysea.clan.ui.control
+package com.fantaysea.clan.ui.screens.devices
 
 import androidx.compose.runtime.Stable
 import com.fantaysea.clan.data.repository.PairedDevice
@@ -11,7 +11,7 @@ import com.fantaysea.clan.data.repository.PairedDevice
  * 默认空实现同时方便 @Preview 与测试直接构造。
  */
 @Stable
-internal class ControlHomeActions(
+internal class DeviceListActions(
     val onBack: () -> Unit = {},
     val onOpenPairDialog: () -> Unit = {},
     val onRetry: () -> Unit = {},

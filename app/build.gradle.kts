@@ -1,10 +1,27 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
+// 优先使用 -PCLAN_API_BASE_URL / Gradle 用户目录的 CLAN_API_BASE_URL；
+// 其次读取 gitignored 的 local.properties `clan.apiBaseUrl`，方便同一台开发机固定局域网地址。
+val localClanApiBaseUrl = providers.provider {
+    val localFile = rootProject.file("local.properties")
+    if (!localFile.isFile) {
+        ""
+    } else {
+        Properties().apply {
+            localFile.inputStream().use { load(it) }
+        }.getProperty("clan.apiBaseUrl").orEmpty()
+    }
+}
 val configuredClanApiBaseUrl = providers.gradleProperty("CLAN_API_BASE_URL")
+    .orElse(localClanApiBaseUrl)
+    .map { it.trim() }
+    .filter { it.isNotEmpty() }
     .map { if (it.endsWith('/')) it else "$it/" }
 val debugClanApiBaseUrl = configuredClanApiBaseUrl.orElse("http://192.168.110.3:8080/")
 val releaseClanApiBaseUrl = configuredClanApiBaseUrl.orElse("https://clan.invalid/")
@@ -72,7 +89,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.retrofit.core)
@@ -80,6 +97,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.webrtc.android)
+    implementation(libs.android.cn.oaid)
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
