@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release 网络安全策略。
+
+  背景：后端域名尚未注册，过渡期只能用 http://121.41.87.116（80 端口经 Nginx）。
+  Android 9(API 28) 起默认禁止明文流量，必须显式放行，否则 OkHttp 抛
+  CLEARTEXT communication to ... not permitted by network security policy。
+
+  设计原则：**不做全局放行**，只对这台后端 IP 开白名单，
+  其余主机仍强制 HTTPS，等同默认安全基线。
+
+  注意：本文件的优先级高于 AndroidManifest 的 android:usesCleartextTraffic。
+  即存在 networkSecurityConfig 时，usesCleartextTraffic 不再生效。
+
+  Debug 变体有同名资源（app/src/debug/res/xml/network_security_config.xml），
+  在 debug 构建时覆盖本文件、全局允许明文，便于连任意局域网/公网调试地址。
+
+  域名与 HTTPS 就绪后：删除下方 domain-config 段，并把后端地址改为 https://域名。
+-->
+<network-security-config>
+
+    <!-- 默认策略：禁止明文，仅信任系统 CA -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 过渡期白名单：仅放行后端公网 IP 的明文 HTTP / WS -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">121.41.87.116</domain>
+    </domain-config>
+
+</network-security-config>

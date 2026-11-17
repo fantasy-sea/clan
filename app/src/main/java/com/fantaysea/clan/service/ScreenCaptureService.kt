@@ -121,7 +121,7 @@ class ScreenCaptureService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_screen_share)
+            .setSmallIcon(R.drawable.ic_clan_logo)
             .setContentTitle(getString(R.string.screen_capture_notification_title))
             .setContentText(getString(R.string.screen_capture_notification_text))
             .setContentIntent(contentIntent)

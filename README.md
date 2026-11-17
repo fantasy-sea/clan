@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" alt="家助（clan）logo" width="180">
+</p>
+
 # clan(家'助')
 
 > 获取被控手机屏幕内容，控制方可以远程操作被控手机

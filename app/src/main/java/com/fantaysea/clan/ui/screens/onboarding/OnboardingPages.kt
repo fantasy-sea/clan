@@ -7,6 +7,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,10 +37,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.R
 
 /**
  * 欢迎页分页模型。
@@ -61,6 +65,16 @@ internal fun onboardingPages(): List<OnboardingPage> = buildList {
             SamplePage(
                 title = "欢迎使用家'助'",
                 description = "家助是一款远程屏幕控制应用, 让您随时远程操作家人的手机。\n\n这里是产品介绍正文区域, 后续替换为你设计的文案与配图。",
+                illustration = {
+                    Image(
+                        painter = painterResource(R.drawable.ic_clan_logo),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .aspectRatio(300f / 220.05f),
+                    )
+                },
             )
         }
     )
@@ -93,7 +107,11 @@ internal fun onboardingPages(): List<OnboardingPage> = buildList {
  * 整体可滚动, 适配小屏。各页可直接复用或完全重绘。
  */
 @Composable
-internal fun SamplePage(title: String, description: String) {
+internal fun SamplePage(
+    title: String,
+    description: String,
+    illustration: (@Composable () -> Unit)? = null,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -111,11 +129,15 @@ internal fun SamplePage(title: String, description: String) {
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "插图占位",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (illustration != null) {
+                illustration()
+            } else {
+                Text(
+                    text = "插图占位",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Spacer(modifier = Modifier.height(32.dp))
         Text(

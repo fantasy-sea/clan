@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -396,28 +397,31 @@ private fun SharePermissionSection(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // ListItem 自带 16dp 横向内边距，外层只保留纵向间距，头部文本单独补横向内边距；
+        // 纵向间距也相应减小，因为 ListItem 上下各有 8dp 内边距。
+        Column(modifier = Modifier.padding(vertical = 14.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "控制权限",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = if (allGranted) "已就绪" else "已授权 $grantedCount / 2",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (allGranted) ColorGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "控制权限",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
+                    text = "处理对方发起的控制请求前，需完成以下两项授权",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    text = if (allGranted) "已就绪" else "已授权 $grantedCount / 2",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (allGranted) ColorGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Spacer(modifier = Modifier.height(4.dp))
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "处理对方发起的控制请求前，需完成以下两项授权",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
             PermissionRow(
                 icon = ClanIcons.ScreenShare,
                 title = "屏幕共享",
@@ -428,7 +432,7 @@ private fun SharePermissionSection(
                 onAction = onRequestCapture,
             )
             HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             )
             PermissionRow(
@@ -442,8 +446,10 @@ private fun SharePermissionSection(
             )
 
             if (!allGranted && pendingControllerName != null) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         text = "「$pendingControllerName」的控制请求正在等待授权",
                         style = MaterialTheme.typography.bodySmall,
@@ -469,50 +475,56 @@ private fun PermissionRow(
     actionLabel: String,
     onAction: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(
-                    if (granted) ColorGreen.copy(alpha = 0.15f)
-                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (granted) ColorGreen else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+    ListItem(
+        modifier = Modifier.fillMaxWidth(),
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (granted) ColorGreen.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (granted) ColorGreen else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        },
+        headlineContent = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
+        },
+        supportingContent = {
             Text(
                 text = if (granted) grantedText else missingText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        if (granted) {
-            Icon(
-                imageVector = Icons.Filled.CheckCircle,
-                contentDescription = "已授权",
-                tint = ColorGreen,
-                modifier = Modifier.size(20.dp),
-            )
-        } else {
-            TextButton(onClick = onAction) {
-                Text(actionLabel)
+        },
+        trailingContent = {
+            if (granted) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "已授权",
+                    tint = ColorGreen,
+                    modifier = Modifier.size(20.dp),
+                )
+            } else {
+                TextButton(onClick = onAction) {
+                    Text(actionLabel)
+                }
             }
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -536,37 +548,38 @@ private fun ShareContent(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = ClanIcons.PhoneAndroid,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column {
+            ListItem(
+                modifier = Modifier.fillMaxWidth(),
+                leadingContent = {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = ClanIcons.PhoneAndroid,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                },
+                headlineContent = {
                     Text(
                         text = state.deviceName.ifEmpty { "本机设备" },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
+                },
+                supportingContent = {
                     Text(
                         text = "${state.platform.ifEmpty { "ANDROID" }} · ${state.model} · 标识 ${state.deviceIdShort}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-            }
+                },
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))

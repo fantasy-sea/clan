@@ -801,7 +801,7 @@ private fun DeviceRowContent(
             )
         }
         Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f) , verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = device.device.deviceName,
@@ -814,7 +814,6 @@ private fun DeviceRowContent(
                 Spacer(modifier = Modifier.width(8.dp))
                 StatusPill(online = device.online)
             }
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = if (device.online) device.device.model
                 else "${device.device.model} · ${relativeTime(device.device.lastOnlineAt)}",

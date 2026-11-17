@@ -5,10 +5,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,8 +39,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.fantaysea.clan.R
 import com.fantaysea.clan.core.di.LocalNavigator
 import com.fantaysea.clan.core.navigation.DeviceListDest
 import com.fantaysea.clan.core.navigation.ShareScreenDest
@@ -46,9 +53,10 @@ import com.fantaysea.clan.data.model.HomeMenuCardInfo
 import com.fantaysea.clan.ui.icons.ClanIcons
 
 
+@Preview(name = "互联功能入口", showBackground = true)
 @Composable
 fun ModuleEntryScreen(
-    isPlayAnimation: Boolean = true
+    isPlayAnimation: Boolean = false
 ) {
     val navigator = LocalNavigator.current
     val colorScheme = MaterialTheme.colorScheme
@@ -138,11 +146,12 @@ fun ModuleEntryScreen(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = ClanIcons.ScreenShare,
+                        Image(
+                            painter = painterResource(R.drawable.ic_clan_logo),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp),
+                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(width = 36.dp, height = 26.4.dp),
                         )
                     }
                     Spacer(modifier = Modifier.size(14.dp))
@@ -162,12 +171,13 @@ fun ModuleEntryScreen(
             }
             Spacer(modifier = Modifier.height(20.dp))
             // 入口卡片(交错入场)
-            moduleList.forEach {
-                Spacer(modifier = Modifier.height(20.dp))
-                EntryCard(
-                    visible = entered,
-                    info = it,
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                moduleList.forEach {
+                    EntryCard(
+                        visible = entered,
+                        info = it,
+                    )
+                }
             }
             Spacer(modifier = Modifier.weight(1f))
             Text(
@@ -181,6 +191,7 @@ fun ModuleEntryScreen(
         }
     }
 }
+
 @Composable
 private fun EntryCard(
     visible: Boolean,

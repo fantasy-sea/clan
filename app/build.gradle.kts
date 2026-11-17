@@ -23,8 +23,8 @@ val configuredClanApiBaseUrl = providers.gradleProperty("CLAN_API_BASE_URL")
     .map { it.trim() }
     .filter { it.isNotEmpty() }
     .map { if (it.endsWith('/')) it else "$it/" }
-val debugClanApiBaseUrl = configuredClanApiBaseUrl.orElse("http://192.168.110.3:8080/")
-val releaseClanApiBaseUrl = configuredClanApiBaseUrl.orElse("https://clan.invalid/")
+val debugClanApiBaseUrl = configuredClanApiBaseUrl.orElse("http://192.168.110.2:8080/")
+val releaseClanApiBaseUrl = configuredClanApiBaseUrl.orElse("https://100.67.246.110:8080/")
 
 // WebRTC ICE 配置：默认 STUN 只负责 NAT 反射地址发现，媒体仍走 P2P；
 // 对称 NAT/跨运营商场景需要通过 -PCLAN_TURN_URL 等属性配置独立 TURN。

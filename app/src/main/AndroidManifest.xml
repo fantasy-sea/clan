@@ -14,7 +14,6 @@
     <!-- 屏幕捕获: 前台服务 + MediaProjection 类型 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-
     <!--
       OAID 库为 IMEI/GUID 等未使用能力声明的权限，按最小必要原则移除；
       本应用只读取 OAID，不读取电话、系统设置或外部存储。
@@ -27,6 +26,7 @@
         android:name=".ClanApplication"
         android:allowBackup="true"
         android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
